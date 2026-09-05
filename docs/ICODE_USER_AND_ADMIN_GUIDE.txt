@@ -1,0 +1,257 @@
+════════════════════════════════════════════════════════════════════
+    iCODE — FULL USER & ADMIN GUIDE
+════════════════════════════════════════════════════════════════════
+
+Quick overview of how iCode works:
+
+    Install iCode -> free 21-DAY TRIAL starts automatically
+                 -> pay 1,000 RWF (MTN MoMo or BK Bank)
+                 -> fill the Google Form
+                 -> ADMIN verifies your payment
+                 -> ADMIN sends you a PASSCODE (ICODE-XXXX-XXXX)
+                 -> you enter the passcode and keep using iCode
+
+The browser is used ONLY for: starting/checking your trial, paying,
+filling the form, and entering your passcode. Day-to-day coding
+happens in the terminal.
+
+
+════════════════════════════════════════════════════════════════════
+PART 1 — INSTALLING iCODE ON ANY OPERATING SYSTEM
+════════════════════════════════════════════════════════════════════
+
+REQUIREMENTS
+------------
+- Node.js (any recent version) + npm. Install Node first:
+      Ubuntu/Debian : sudo apt install nodejs npm
+      Windows       : download from https://nodejs.org (LTS)
+      macOS         : brew install node   (or download from nodejs.org)
+  Verify with:  node -v  and  npm -v
+- iCode supports: Linux, macOS, Windows  (on both x64 and arm64 CPUs).
+
+INSTALL (one command, works for EVERY operating system)
+-------------------------------------------------------
+    npm install -g @vln.codes__/icode
+
+That's it. npm automatically downloads the correct native binary for
+your OS + CPU (Linux, macOS, or Windows on x64/arm64).
+
+VERIFY THE INSTALL
+------------------
+    icode --version
+
+Expected output:  1.1.0
+
+If you get "command not found", see Troubleshooting at the end.
+
+
+════════════════════════════════════════════════════════════════════
+PART 2 — THE USER FLOW (step by step)
+════════════════════════════════════════════════════════════════════
+
+STEP 1 — First run / Free 21-day trial
+--------------------------------------
+Open a terminal and type:
+
+    icode
+
+On the FIRST run a FREE 21-DAY TRIAL starts automatically.
+You will see a welcome banner like:
+
+    ✓ Murakaza neza kuri iCode!
+    Ufite igihe cy'igerageza cy'ibyumweru 3 (free trial).
+    Igihe kigeze: 9/26/2026
+    Iminsi: 21
+
+Your browser also opens a page showing your trial. You can start
+coding with iCode immediately:
+    icode "your task or question"
+or just run  icode  for the interactive terminal.
+
+The trial is tied to YOUR MACHINE. It cannot be extended by changing
+your computer's clock or reinstalling the app.
+
+STEP 2 — When the 21-day trial ends
+-----------------------------------
+The next time you run  icode  the terminal will tell you the trial has
+finished and open a browser page asking for a passcode.
+
+STEP 3 — Pay 1,000 RWF
+----------------------
+On the browser payment page you'll see the payment details:
+
+    AMOUNT          : exactly 1,000 RWF
+    MTN Mobile Money: 1787240   (name: Paisible Valentin)
+    BK Bank         : 100269073874   (name: Paisible Valentin Irabizi)
+
+Send exactly 1,000 RWF using either MTN MoMo or BK Bank.
+IMPORTANT: Send the EXACT amount. Keep the payment reference/ID.
+
+STEP 4 — Fill the Google Form
+-----------------------------
+After paying, click the button "NISHYUYE — NUZUZA FORM" (or go to):
+
+    https://forms.gle/48iUwJ2nCBU6uwQc8
+
+Fill in: your name, phone number, email, payment method, and the
+payment reference number.
+
+PAYING ALONE IS NOT ENOUGH — you MUST also fill the Google Form so the
+admin can confirm your payment.
+
+STEP 5 — Wait for admin approval
+--------------------------------
+The admin checks each payment + form entry. This usually takes a short
+time. You do NOT have to do anything now.
+
+STEP 6 — Get your passcode from the admin
+-----------------------------------------
+Once your payment is confirmed, the admin sends you a unique passcode
+that looks like:
+
+    ICODE-XXXX-XXXX
+
+(Example: ICODE-86E5-AHRQ)
+
+STEP 7 — Enter your passcode
+----------------------------
+Run  icode  again. The browser page that opens has a "Ufite Passcode?"
+section. Type your passcode there (or follow the terminal prompts).
+
+You will see:
+
+    ✓ iCode Access Verified
+    ✓ Murakaza neza kuri iCode!
+    ✓ Ubu ushobora gukomeza gukoresha iCode.
+
+...and iCode keeps working.
+
+STEP 8 — Using iCode day to day
+-------------------------------
+Commands:
+    icode                      interactive terminal
+    icode "solve this bug"     give iCode a task
+    icode --help               see all options
+
+
+════════════════════════════════════════════════════════════════════
+PART 3 — YOUR PART AS ADMIN
+════════════════════════════════════════════════════════════════════
+
+ADMIN DASHBOARD
+---------------
+Open your browser and go to:
+
+    https://icode-s05p.onrender.com/admin
+
+Log in with the ADMIN credential kept in (on the server machine):
+    /home/valentin/icode/icode-control-deploy/data/.env.runtime
+
+(That file is private — never share ADMIN_TOKEN or WEBHOOK_SECRET.)
+
+WHAT YOU DO, EVERY DAY
+----------------------
+1. Open the Admin dashboard (link above) and log in.
+2. Go to the "Payment Requests" tab. You'll see everyone who paid AND
+   filled the Google Form, each with their payment reference.
+
+3. VERIFY a payment:
+      - Check the reference matches an MTN MoMo / BK transaction for
+        exactly 1,000 RWF from that person.
+      - Check they also filled the Google Form.
+      - If everything matches, click APPROVE.
+        -> The system generates a UNIQUE passcode (ICODE-XXXX-XXXX)
+           valid for 30 days. Copy it and send it to the user
+           (WhatsApp / SMS / email).
+
+4. REJECT bad requests:
+      - Wrong amount, fake reference, or a DUPLICATE reference
+        -> click REJECT. Duplicates are flagged automatically and
+           cannot be approved.
+
+RULE OF THUMB (never skip):
+    Payment   +   Google Form filled   +   YOUR approval
+    =  the user gets a passcode.
+    Payment alone or form alone is NOT enough.
+
+OTHER ADMIN TOOLS (same dashboard)
+----------------------------------
+- Passcodes    : see all issued passcodes (codes are MASKED for
+                 safety). You can REVOKE a passcode (user loses access
+                 immediately) or REACTIVATE it.
+- Installs     : every machine that has installed iCode, its last
+                 activity, and any block.
+- Trials       : who is on a free trial, active/expired counts,
+                 expiry warnings.
+- Customers    : all paying customers and their history.
+- Audit Log    : a full record of every action (payments approved,
+                 passcodes created/revoked, etc.) for your records.
+
+MANAGING A PROBLEM USER
+-----------------------
+- User stopped paying but still accessing:
+      Admin > Passcodes > Revoke their passcode. Access stops
+      immediately.
+- User disputes a passcode:
+      Admin > Passcodes > Revoke (then Reactivate if it was a mistake).
+- Suspicious duplicate payments:
+      The system flags them; simply reject the duplicate.
+
+
+════════════════════════════════════════════════════════════════════
+PART 4 — UPDATING / REINSTALLING / UNINSTALLING
+════════════════════════════════════════════════════════════════════
+
+UPDATE iCode to the latest version (all OSes):
+    npm install -g @vln.codes__/icode@latest
+
+REINSTALL (if a platform binary went missing):
+    npm install -g @vln.codes__/icode --force
+
+UNINSTALL:
+    npm uninstall -g @vln.codes__/icode
+
+WHERE iCode stores its files (Linux):
+    ~/.local/state/icode/
+        machine-id     (permanent ID of this machine)
+        passcode.json  (your stored passcode / trial info)
+(Location varies by OS; it is a per-user home folder.)
+Do not delete these unless you want to stop using iCode on that machine.
+
+
+════════════════════════════════════════════════════════════════════
+PART 5 — TROUBLESHOOTING
+════════════════════════════════════════════════════════════════════
+
+"command not found" after installing
+  - Re-open your terminal, or log out/in.
+  - Confirm Node/npm installed:  node -v
+  - Reinstall:  npm install -g @vln.codes__/icode --force
+
+"iCode native binary ... is not installed"
+  - This means the platform package didn't download. Reinstall:
+        npm install -g @vln.codes__/icode --force
+
+Wrong/old version shows with  icode --version
+  - Update:  npm install -g @vln.codes__/icode@latest
+
+Trial says it already ended or "passcode siyo"
+  - Check your passcode was typed exactly (ICODE-XXXX-XXXX).
+  - If you never paid: pay 1,000 RWF, fill the Google Form, then wait
+    for the admin to approve and send you a passcode.
+
+"No network" error
+  - iCode checks the server once; you need an internet connection at
+    least every 24 hours.
+
+Machine won't work after changing OS / very old messages
+  - Full reinstall:  npm uninstall -g @vln.codes__/icode
+                      npm install -g @vln.codes__/icode
+
+════════════════════════════════════════════════════════════════════
+Quick links:
+  iCode npm package   : https://www.npmjs.com/package/@vln.codes__/icode
+  Access / Payment    : https://icode-s05p.onrender.com/access
+  Admin dashboard     : https://icode-s05p.onrender.com/admin
+  Google Form         : https://forms.gle/48iUwJ2nCBU6uwQc8
+════════════════════════════════════════════════════════════════════

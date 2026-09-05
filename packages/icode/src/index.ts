@@ -1,0 +1,8 @@
+export { runCLI } from "./cli/shell"
+export { loadConfig, DEFAULT_CONFIG, apiKey, hasEjoChatKey } from "./config"
+export type { ICodeConfig, LanguageMode } from "./config"
+export { KinyarwandaService, protectTokens, TokenProtector, detectLanguage, extractIntent } from "./language"
+export { redactSecrets, isLikelySecret } from "./security/secret"
+export { createTheme } from "./cli/theme"
+export type { Theme } from "./cli/theme"
+export { SLASH_COMMANDS } from "./cli/slashes"

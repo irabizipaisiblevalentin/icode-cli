@@ -1,0 +1,521 @@
+import { Database } from "bun:sqlite"
+import { randomUUID } from "crypto"
+import { mkdirSync } from "fs"
+import { join } from "path"
+
+const DB_PATH = process.env.DB_PATH ?? (process.env.DATA_DIR ? join(process.env.DATA_DIR, "icode-control.db") : "./icode-control.db")
+
+export const ACCESS_DURATION_DAYS = parseInt(process.env.ICODE_ACCESS_DURATION_DAYS ?? "30")
+export const PAYMENT_AMOUNT_RWF = 1000
+
+const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET
+export function isValidWebhook(request: Request): boolean {
+  if (!WEBHOOK_SECRET) return false
+  const header = request.headers.get("x-webhook-token")
+  if (!header) return false
+  if (header !== WEBHOOK_SECRET) return false
+  return true
+}
+
+let _db: Database | null = null
+
+function db(): Database {
+  if (!_db) {
+    if (DB_PATH !== ":memory:") {
+      const parent = DB_PATH.includes("/") ? DB_PATH.slice(0, DB_PATH.lastIndexOf("/")) : "."
+      if (parent && parent !== ".") mkdirSync(parent, { recursive: true })
+    }
+    _db = new Database(DB_PATH)
+    _db.run("PRAGMA journal_mode = WAL")
+    _db.run("PRAGMA busy_timeout = 5000")
+    init(_db)
+  }
+  return _db
+}
+
+function init(db: Database) {
+  db.run(`
+    CREATE TABLE IF NOT EXISTS passcodes (
+      id TEXT PRIMARY KEY,
+      code TEXT UNIQUE NOT NULL,
+      type TEXT NOT NULL CHECK(type IN ('public','personal')),
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      expires_at TEXT NOT NULL,
+      max_uses INTEGER,
+      current_uses INTEGER NOT NULL DEFAULT 0,
+      blocked INTEGER NOT NULL DEFAULT 0,
+      note TEXT,
+      payment_request_id TEXT
+    )
+  `)
+  db.run(`
+    CREATE TABLE IF NOT EXISTS customers (
+      id TEXT PRIMARY KEY,
+      name TEXT,
+      email TEXT,
+      phone TEXT,
+      reference TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      passcode_id TEXT,
+      last_payment_at TEXT,
+      notes TEXT,
+      FOREIGN KEY (passcode_id) REFERENCES passcodes(id)
+    )
+  `)
+  db.run(`
+    CREATE TABLE IF NOT EXISTS installs (
+      id TEXT PRIMARY KEY,
+      machine_id TEXT UNIQUE NOT NULL,
+      platform TEXT NOT NULL,
+      arch TEXT NOT NULL,
+      version TEXT,
+      passcode_id TEXT,
+      registered_at TEXT NOT NULL DEFAULT (datetime('now')),
+      last_seen_at TEXT NOT NULL DEFAULT (datetime('now')),
+      blocked INTEGER NOT NULL DEFAULT 0,
+      block_reason TEXT,
+      FOREIGN KEY (passcode_id) REFERENCES passcodes(id)
+    )
+  `)
+  db.run(`
+    CREATE TABLE IF NOT EXISTS usage (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      install_id TEXT NOT NULL,
+      period_key TEXT NOT NULL,
+      seconds_used REAL NOT NULL DEFAULT 0,
+      FOREIGN KEY (install_id) REFERENCES installs(id),
+      UNIQUE(install_id, period_key)
+    )
+  `)
+  db.run(`CREATE INDEX IF NOT EXISTS idx_passcodes_code ON passcodes(code)`)
+  db.run(`CREATE INDEX IF NOT EXISTS idx_installs_machine ON installs(machine_id)`)
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS payment_requests (
+      id TEXT PRIMARY KEY,
+      full_name TEXT NOT NULL,
+      email TEXT,
+      phone_number TEXT,
+      payment_method TEXT NOT NULL,
+      transaction_reference TEXT NOT NULL,
+      payment_amount REAL NOT NULL,
+      payment_date TEXT,
+      payment_time TEXT,
+      payment_proof TEXT,
+      status TEXT NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING','APPROVED','REJECTED')),
+      admin_note TEXT,
+      is_duplicate INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      verified_at TEXT,
+      verified_by TEXT
+    )
+  `)
+  db.run(`
+    CREATE TABLE IF NOT EXISTS audit_log (
+      id TEXT PRIMARY KEY,
+      action TEXT NOT NULL,
+      actor_id TEXT,
+      target_id TEXT,
+      timestamp TEXT NOT NULL DEFAULT (datetime('now')),
+      metadata TEXT
+    )
+  `)
+  db.run(`CREATE INDEX IF NOT EXISTS idx_payment_requests_transaction ON payment_requests(transaction_reference)`)
+  db.run(`CREATE INDEX IF NOT EXISTS idx_payment_requests_status ON payment_requests(status)`)
+  db.run(`CREATE INDEX IF NOT EXISTS idx_passcodes_payment ON passcodes(payment_request_id)`)
+
+  // Migration: add payment_request_id column to existing passcodes tables
+  const cols = db.query(`PRAGMA table_info(passcodes)`).all() as { name: string }[]
+  if (!cols.some((c) => c.name === "payment_request_id")) {
+    db.run(`ALTER TABLE passcodes ADD COLUMN payment_request_id TEXT`)
+  }
+}
+
+// ─── Passcodes ────────────────────────────────────────────────────────
+
+export interface PasscodeRow {
+  id: string
+  code: string
+  type: "public" | "personal"
+  created_at: string
+  expires_at: string
+  max_uses: number | null
+  current_uses: number
+  blocked: number
+  note: string | null
+  payment_request_id: string | null
+}
+
+export function createPasscode(opts: {
+  type: "public" | "personal"
+  expires_at: string
+  max_uses?: number | null
+  code?: string
+  note?: string
+  payment_request_id?: string
+}): PasscodeRow {
+  const d = db()
+  const id = randomUUID()
+  const code = opts.code ?? randomCode()
+  d.run(
+    `INSERT INTO passcodes (id, code, type, expires_at, max_uses, note, payment_request_id) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [id, code, opts.type, opts.expires_at, opts.max_uses ?? null, opts.note ?? null, opts.payment_request_id ?? null],
+  )
+  return getPasscode(id)!
+}
+
+export function getPasscode(id: string): PasscodeRow | null {
+  return db().query<PasscodeRow, [string]>(`SELECT * FROM passcodes WHERE id = ?`).get(id) ?? null
+}
+
+export function findPasscodeByCode(code: string): PasscodeRow | null {
+  return db().query<PasscodeRow, [string]>(`SELECT * FROM passcodes WHERE code = ?`).get(code) ?? null
+}
+
+export function listPasscodes(): PasscodeRow[] {
+  return db().query<PasscodeRow, []>(`SELECT * FROM passcodes ORDER BY created_at DESC`).all()
+}
+
+export function incrementPasscodeUse(id: string) {
+  db().run(`UPDATE passcodes SET current_uses = current_uses + 1 WHERE id = ?`, [id])
+}
+
+export function blockPasscode(id: string) {
+  db().run(`UPDATE passcodes SET blocked = 1 WHERE id = ?`, [id])
+}
+
+export function unblockPasscode(id: string) {
+  db().run(`UPDATE passcodes SET blocked = 0 WHERE id = ?`, [id])
+}
+
+export function deletePasscode(id: string) {
+  db().run(`DELETE FROM passcodes WHERE id = ?`, [id])
+}
+
+// ─── Customers ────────────────────────────────────────────────────────
+
+export interface CustomerRow {
+  id: string
+  name: string | null
+  email: string | null
+  phone: string | null
+  reference: string | null
+  created_at: string
+  passcode_id: string | null
+  last_payment_at: string | null
+  notes: string | null
+}
+
+export function createCustomer(opts: {
+  name?: string
+  email?: string
+  phone?: string
+  reference?: string
+  passcode_id?: string
+  notes?: string
+}): CustomerRow {
+  const d = db()
+  const id = randomUUID()
+  d.run(
+    `INSERT INTO customers (id, name, email, phone, reference, passcode_id, last_payment_at, notes)
+     VALUES (?, ?, ?, ?, ?, ?, datetime('now'), ?)`,
+    [
+      id,
+      opts.name ?? null,
+      opts.email ?? null,
+      opts.phone ?? null,
+      opts.reference ?? null,
+      opts.passcode_id ?? null,
+      opts.notes ?? null,
+    ],
+  )
+  return getCustomer(id)!
+}
+
+export function getCustomer(id: string): CustomerRow | null {
+  return db().query<CustomerRow, [string]>(`SELECT * FROM customers WHERE id = ?`).get(id) ?? null
+}
+
+export function findCustomerByEmailOrRef(email?: string, ref?: string): CustomerRow | null {
+  const d = db()
+  if (email) {
+    const byEmail = d.query<CustomerRow, [string]>(`SELECT * FROM customers WHERE email = ?`).get(email)
+    if (byEmail) return byEmail
+  }
+  if (ref) {
+    const byRef = d.query<CustomerRow, [string]>(`SELECT * FROM customers WHERE reference = ?`).get(ref)
+    if (byRef) return byRef
+  }
+  return null
+}
+
+export function listCustomers(): CustomerRow[] {
+  return db().query<CustomerRow, []>(`SELECT * FROM customers ORDER BY created_at DESC`).all()
+}
+
+export function linkCustomerPasscode(id: string, passcodeId: string) {
+  db().run(`UPDATE customers SET passcode_id = ?, last_payment_at = datetime('now') WHERE id = ?`, [passcodeId, id])
+}
+
+export function updateCustomerNotes(id: string, notes: string | null) {
+  db().run(`UPDATE customers SET notes = ? WHERE id = ?`, [notes ?? null, id])
+}
+
+export function deleteCustomer(id: string) {
+  db().run(`DELETE FROM customers WHERE id = ?`, [id])
+}
+
+// ─── Installs ─────────────────────────────────────────────────────────
+
+export interface InstallRow {
+  id: string
+  machine_id: string
+  platform: string
+  arch: string
+  version: string | null
+  passcode_id: string | null
+  registered_at: string
+  last_seen_at: string
+  blocked: number
+  block_reason: string | null
+}
+
+export function upsertInstall(opts: {
+  machine_id: string
+  platform: string
+  arch: string
+  version?: string
+  passcode_id?: string
+}): InstallRow {
+  const d = db()
+  const existing = d.query<InstallRow, [string]>(`SELECT * FROM installs WHERE machine_id = ?`).get(opts.machine_id)
+  if (existing) {
+    d.run(
+      `UPDATE installs SET platform = ?, arch = ?, version = ?, passcode_id = ?, last_seen_at = datetime('now') WHERE machine_id = ?`,
+      [opts.platform, opts.arch, opts.version ?? existing.version, opts.passcode_id ?? existing.passcode_id, opts.machine_id],
+    )
+    return d.query<InstallRow, [string]>(`SELECT * FROM installs WHERE machine_id = ?`).get(opts.machine_id)!
+  }
+  const id = randomUUID()
+  d.run(
+    `INSERT INTO installs (id, machine_id, platform, arch, version, passcode_id) VALUES (?, ?, ?, ?, ?, ?)`,
+    [id, opts.machine_id, opts.platform, opts.arch, opts.version ?? null, opts.passcode_id ?? null],
+  )
+  return d.query<InstallRow, [string]>(`SELECT * FROM installs WHERE id = ?`).get(id)!
+}
+
+export function getInstallByMachine(machineId: string): InstallRow | null {
+  return db().query<InstallRow, [string]>(`SELECT * FROM installs WHERE machine_id = ?`).get(machineId) ?? null
+}
+
+export function listInstalls(): InstallRow[] {
+  return db().query<InstallRow, []>(`SELECT * FROM installs ORDER BY last_seen_at DESC`).all()
+}
+
+export function blockInstall(id: string, reason?: string) {
+  db().run(`UPDATE installs SET blocked = 1, block_reason = ? WHERE id = ?`, [reason ?? null, id])
+}
+
+export function unblockInstall(id: string) {
+  db().run(`UPDATE installs SET blocked = 0, block_reason = NULL WHERE id = ?`, [id])
+}
+
+export function deleteInstall(id: string) {
+  db().run(`DELETE FROM installs WHERE id = ?`, [id])
+}
+
+// ─── Usage ────────────────────────────────────────────────────────────
+
+export interface UsageRow {
+  id: number
+  install_id: string
+  period_key: string
+  seconds_used: number
+}
+
+export function addUsage(installId: string, periodKey: string, seconds: number) {
+  const d = db()
+  d.run(
+    `INSERT INTO usage (install_id, period_key, seconds_used) VALUES (?, ?, ?)
+     ON CONFLICT(install_id, period_key) DO UPDATE SET seconds_used = seconds_used + ?`,
+    [installId, periodKey, seconds, seconds],
+  )
+}
+
+export function getUsage(installId: string, periodKey: string): number {
+  const row = db().query<{ seconds_used: number }, [string, string]>(
+    `SELECT seconds_used FROM usage WHERE install_id = ? AND period_key = ?`,
+  ).get(installId, periodKey)
+  return row?.seconds_used ?? 0
+}
+
+// ─── Payment Requests ────────────────────────────────────────────────
+
+export type PaymentStatus = "PENDING" | "APPROVED" | "REJECTED"
+
+export interface PaymentRequestRow {
+  id: string
+  full_name: string
+  email: string | null
+  phone_number: string | null
+  payment_method: string | null
+  transaction_reference: string | null
+  payment_amount: number | null
+  payment_date: string | null
+  payment_time: string | null
+  payment_proof: string | null
+  status: PaymentStatus
+  admin_note: string | null
+  is_duplicate: number
+  created_at: string
+  updated_at: string
+  verified_at: string | null
+  verified_by: string | null
+}
+
+export interface PaymentRequestInput {
+  fullName: string
+  email?: string
+  phoneNumber?: string
+  paymentMethod?: string
+  transactionReference?: string
+  paymentAmount?: number
+  paymentDate?: string
+  paymentTime?: string
+  paymentProof?: string
+}
+
+export function findDuplicatePayment(
+  reference?: string,
+  method?: string,
+  amount?: number,
+  email?: string,
+): PaymentRequestRow | null {
+  if (!reference) return null
+  const d = db()
+  return (
+    d
+      .query<PaymentRequestRow, [string]>(`SELECT * FROM payment_requests WHERE transaction_reference = ? ORDER BY created_at DESC LIMIT 1`)
+      .get(reference) ?? null
+  )
+}
+
+export function createPaymentRequest(input: PaymentRequestInput): { request: PaymentRequestRow; isDuplicate: boolean } {
+  const d = db()
+  const duplicate = findDuplicatePayment(input.transactionReference, input.paymentMethod, input.paymentAmount, input.email)
+  const id = randomUUID()
+  const ref = input.transactionReference ?? null
+  d.run(
+    `INSERT INTO payment_requests (id, full_name, email, phone_number, payment_method, transaction_reference, payment_amount, payment_date, payment_time, payment_proof, is_duplicate)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      id,
+      input.fullName,
+      input.email ?? null,
+      input.phoneNumber ?? null,
+      input.paymentMethod ?? null,
+      ref,
+      input.paymentAmount ?? null,
+      input.paymentDate ?? null,
+      input.paymentTime ?? null,
+      input.paymentProof ?? null,
+      duplicate ? 1 : 0,
+    ],
+  )
+  if (duplicate) {
+    writeAudit("DUPLICATE_PAYMENT", "system", id, { reference: input.transactionReference })
+  }
+  return { request: getPaymentRequest(id)!, isDuplicate: !!duplicate }
+}
+
+export function getPaymentRequest(id: string): PaymentRequestRow | null {
+  return db().query<PaymentRequestRow, [string]>(`SELECT * FROM payment_requests WHERE id = ?`).get(id) ?? null
+}
+
+export function listPaymentRequests(): PaymentRequestRow[] {
+  return db().query<PaymentRequestRow, []>(`SELECT * FROM payment_requests ORDER BY created_at DESC`).all()
+}
+
+export function getPaymentRequestByPasscode(passcodeId: string): PaymentRequestRow | null {
+  return db().query<PaymentRequestRow, [string]>(`SELECT * FROM payment_requests WHERE id = (SELECT payment_request_id FROM passcodes WHERE id = ?)`).get(passcodeId) ?? null
+}
+
+export function updatePaymentRequestStatus(
+  id: string,
+  status: PaymentStatus,
+  options?: { adminNote?: string; verifiedBy?: string },
+) {
+  db().run(
+    `UPDATE payment_requests SET status = ?, admin_note = ?, verified_at = ?, verified_by = ?, updated_at = datetime('now') WHERE id = ?`,
+    [
+      status,
+      options?.adminNote ?? null,
+      status === "APPROVED" || status === "REJECTED" ? new Date().toISOString() : null,
+      options?.verifiedBy ?? null,
+      id,
+    ],
+  )
+  return getPaymentRequest(id)
+}
+
+export function getPaymentStats() {
+  const d = db()
+  const count = (where: string) => {
+    const row = d.query<{ c: number }, []>(`SELECT COUNT(*) AS c FROM payment_requests WHERE ${where}`).get()
+    return row?.c ?? 0
+  }
+  const now = new Date().toISOString()
+  return {
+    total: count("1 = 1"),
+    pending: count("status = 'PENDING'"),
+    approved: count("status = 'APPROVED'"),
+    rejected: count("status = 'REJECTED'"),
+    active_passcodes: d.query<{ c: number }, [string]>(`SELECT COUNT(*) AS c FROM passcodes WHERE blocked = 0 AND expires_at > ?`).get(now)?.c ?? 0,
+    expired_passcodes: d.query<{ c: number }, [string]>(`SELECT COUNT(*) AS c FROM passcodes WHERE blocked = 0 AND expires_at <= ?`).get(now)?.c ?? 0,
+  }
+}
+
+// ─── Audit Log ────────────────────────────────────────────────────────
+
+export interface AuditLogRow {
+  id: string
+  action: string
+  actor_id: string | null
+  target_id: string | null
+  timestamp: string
+  metadata: string | null
+}
+
+export function writeAudit(action: string, actorId: string, targetId?: string, metadata?: unknown) {
+  db().run(
+    `INSERT INTO audit_log (id, action, actor_id, target_id, metadata) VALUES (?, ?, ?, ?, ?)`,
+    [randomUUID(), action, actorId, targetId ?? null, metadata ? JSON.stringify(metadata) : null],
+  )
+}
+
+export function listAuditLog(): AuditLogRow[] {
+  return db().query<AuditLogRow, []>(`SELECT * FROM audit_log ORDER BY timestamp DESC LIMIT 500`).all()
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────
+
+export function randomCode(): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+  let code = ""
+  for (let i = 0; i < 12; i++) {
+    code += chars[Math.floor(Math.random() * chars.length)]
+    if (i === 3 || i === 7) code += "-"
+  }
+  return code
+}
+
+export function randomAccessCode(): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+  const block = () => {
+    let s = ""
+    for (let i = 0; i < 4; i++) s += chars[Math.floor(Math.random() * chars.length)]
+    return s
+  }
+  return `ICODE-${block()}-${block()}`
+}

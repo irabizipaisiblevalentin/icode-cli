@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json.schemastore.org/package.json",
+  "name": "@vln.codes__/icode",
+  "version": "1.1.0",
+  "description": "iCode — a fast, native AI coding agent with a Kinyarwanda-first experience. Install globally to run `icode`.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "icode": "bin/icode.js"
+  },
+  "files": [
+    "bin/icode.js"
+  ],
+  "scripts": {
+    "dev": "bun run ./bin/icode.ts",
+    "typecheck": "tsgo --noEmit",
+    "test": "bun test --timeout 30000",
+    "package": "bun run script/package.ts --version=$npm_package_version"
+  },
+  "optionalDependencies": {
+    "@vln.codes__/icode-linux-x64": "1.1.0",
+    "@vln.codes__/icode-linux-arm64": "1.1.0",
+    "@vln.codes__/icode-darwin-x64": "1.1.0",
+    "@vln.codes__/icode-darwin-arm64": "1.1.0",
+    "@vln.codes__/icode-windows-x64": "1.1.0",
+    "@vln.codes__/icode-windows-arm64": "1.1.0"
+  },
+  "devDependencies": {
+    "@opencode-ai/script": "workspace:*",
+    "@tsconfig/bun": "catalog:",
+    "@types/bun": "catalog:",
+    "@types/node": "catalog:",
+    "@typescript/native-preview": "catalog:"
+  }
+}

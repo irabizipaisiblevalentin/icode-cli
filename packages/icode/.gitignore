@@ -1,0 +1,14 @@
+# Dependencies
+node_modules/
+
+# Build / coverage artifacts
+*.tsbuildinfo
+coverage/
+dist/
+
+# Local data
+# Never commit real credentials or config that may hold keys.
+*.local.json
+*.local.jsonc
+*.local.toml
+*.local.yaml

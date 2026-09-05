@@ -1,0 +1,11 @@
+# ~/.config/icode/config.yaml
+
+language: rw
+debug: false
+confirmDangerous: true
+termWidth: 100
+
+ejochat:
+  baseUrl: https://api.ejolabs.com/api/v1
+  model: claude-sonnet-4-5-20250929
+  enabled: true

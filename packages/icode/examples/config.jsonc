@@ -1,0 +1,24 @@
+{
+  // ~/.config/icode/config.jsonc
+  // iCode configuration. Env vars override these values.
+  // All values are optional; defaults shown.
+
+  // "rw" (default), "auto", or "en"
+  "language": "rw",
+
+  // Show technical details (works without this; errors are already Kinyarwanda).
+  "debug": false,
+
+  // Confirm dangerous commands before running.
+  "confirmDangerous": true,
+
+  // Fallback terminal width when auto-detection fails.
+  "termWidth": 100,
+
+  "ejochat": {
+    // Official EjoChat API (Ejo Labs). Override with EJOCHAT_BASE_URL.
+    "baseUrl": "https://api.ejolabs.com/api/v1",
+    "model": "claude-sonnet-4-5-20250929",
+    "enabled": true
+  }
+}
