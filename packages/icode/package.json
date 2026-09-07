@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
   "name": "@vln.codes__/icode",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "iCode — a fast, native AI coding agent. Install globally to run `icode`.",
   "license": "MIT",
   "type": "module",
@@ -18,12 +18,12 @@
     "package": "bun run script/package.ts --version=$npm_package_version"
   },
   "optionalDependencies": {
-    "@vln.codes__/icode-linux-x64": "1.1.0",
-    "@vln.codes__/icode-linux-arm64": "1.1.0",
-    "@vln.codes__/icode-darwin-x64": "1.1.0",
-    "@vln.codes__/icode-darwin-arm64": "1.1.0",
-    "@vln.codes__/icode-windows-x64": "1.1.0",
-    "@vln.codes__/icode-windows-arm64": "1.1.0"
+    "@vln.codes__/icode-linux-x64": "1.1.1",
+    "@vln.codes__/icode-linux-arm64": "1.1.1",
+    "@vln.codes__/icode-darwin-x64": "1.1.1",
+    "@vln.codes__/icode-darwin-arm64": "1.1.1",
+    "@vln.codes__/icode-windows-x64": "1.1.1",
+    "@vln.codes__/icode-windows-arm64": "1.1.1"
   },
   "devDependencies": {
     "@opencode-ai/script": "workspace:*",
