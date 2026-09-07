@@ -1,6 +1,6 @@
 # ~/.config/icode/config.toml
 
-language = "auto"
+language = "en"
 debug = false
 confirmDangerous = true
 termWidth = 100

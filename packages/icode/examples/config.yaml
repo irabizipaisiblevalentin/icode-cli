@@ -1,6 +1,6 @@
 # ~/.config/icode/config.yaml
 
-language: rw
+language: en
 debug: false
 confirmDangerous: true
 termWidth: 100

@@ -58,10 +58,10 @@ Open a terminal and type:
 On the FIRST run a FREE 21-DAY TRIAL starts automatically.
 You will see a welcome banner like:
 
-    ✓ Murakaza neza kuri iCode!
-    Ufite igihe cy'igerageza cy'ibyumweru 3 (free trial).
-    Igihe kigeze: 9/26/2026
-    Iminsi: 21
+    ✓ Welcome to iCode!
+    You have a free 3-week trial (21 days).
+    Trial ends: 9/26/2026
+    Days: 21
 
 Your browser also opens a page showing your trial. You can start
 coding with iCode immediately:
@@ -89,7 +89,7 @@ IMPORTANT: Send the EXACT amount. Keep the payment reference/ID.
 
 STEP 4 — Fill the Google Form
 -----------------------------
-After paying, click the button "NISHYUYE — NUZUZA FORM" (or go to):
+After paying, click the button "I PAID — FILL THE FORM" (or go to):
 
     https://forms.gle/48iUwJ2nCBU6uwQc8
 
@@ -115,14 +115,14 @@ that looks like:
 
 STEP 7 — Enter your passcode
 ----------------------------
-Run  icode  again. The browser page that opens has a "Ufite Passcode?"
+Run  icode  again. The browser page that opens has a "Have a Passcode?"
 section. Type your passcode there (or follow the terminal prompts).
 
 You will see:
 
     ✓ iCode Access Verified
-    ✓ Murakaza neza kuri iCode!
-    ✓ Ubu ushobora gukomeza gukoresha iCode.
+    ✓ Welcome to iCode!
+    ✓ You can now continue using iCode.
 
 ...and iCode keeps working.
 
@@ -235,7 +235,7 @@ PART 5 — TROUBLESHOOTING
 Wrong/old version shows with  icode --version
   - Update:  npm install -g @vln.codes__/icode@latest
 
-Trial says it already ended or "passcode siyo"
+Trial says it already ended or "wrong passcode"
   - Check your passcode was typed exactly (ICODE-XXXX-XXXX).
   - If you never paid: pay 1,000 RWF, fill the Google Form, then wait
     for the admin to approve and send you a passcode.

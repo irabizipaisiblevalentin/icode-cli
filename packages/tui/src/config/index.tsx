@@ -39,7 +39,7 @@ export const Cursor = Schema.Struct({
   }),
 }).annotate({ description: "Terminal cursor settings" })
 
-export const Language = Schema.Literals(["rw", "auto", "en"]).annotate({
+export const Language = Schema.Literals(["en"]).annotate({
   description: "Interface language for iCode. English (en) is the default.",
 })
 export type Language = Schema.Schema.Type<typeof Language>
@@ -76,7 +76,7 @@ export const Info = Schema.Struct({
   scroll_acceleration: Schema.optional(ScrollAcceleration),
   diff_style: Schema.optional(DiffStyle),
   language: Schema.optional(Language).annotate({
-    description: "Interface language: en (English), rw, or auto",
+    description: "Interface language: en (English) is the only option",
   }),
   cursor: Schema.optional(Cursor),
   mouse: Schema.optional(Schema.Boolean).annotate({ description: "Enable or disable mouse capture (default: true)" }),
@@ -99,7 +99,7 @@ export type Resolved = Omit<Info, "attention" | "keybinds" | "leader_timeout" | 
     style: "block" | "underline" | "line" | "default"
     blinking: boolean
   }
-  language: "rw" | "auto" | "en"
+    language: "en"
 }
 
 export const ResolveOptions = Schema.Struct({

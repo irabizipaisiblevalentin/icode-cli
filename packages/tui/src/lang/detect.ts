@@ -1,4 +1,4 @@
-export type LanguageMode = "rw" | "en" | "auto"
+export type LanguageMode = "en"
 export type DetectedLanguage = "en"
 
 export interface BaseIntent {
@@ -12,10 +12,8 @@ export const LANGUAGE_MODES: LanguageMode[] = ["en"]
 
 export const LANGUAGES: Record<LanguageMode, string> = {
   en: "English",
-  rw: "English",
-  auto: "English",
 }
 
 export function isLanguageMode(value: string): value is LanguageMode {
-  return value === "rw" || value === "en" || value === "auto"
+  return value === "en"
 }
