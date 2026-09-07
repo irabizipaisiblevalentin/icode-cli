@@ -15,10 +15,9 @@
 icode is an open-source AI coding agent that runs in your **terminal**. It plans,
 writes, and runs code for you within your repository, and it's built to be fast.
 
-- **Kinyarwanda-first** — the interface and prompts default to Kinyarwanda
-  (`/language rw|en|auto`).
-- **EjoChat intelligence** — set `EJOCHAT_API_KEY` to unlock Kinyarwanda
-  language understanding and summaries (optional; the coding engine works offline).
+- **Free & secure** — try iCode for free for 3 weeks; afterwards you need a
+  Passcode (1,000 RWF one-time payment) to keep access.
+- **English-first** — the interface and prompts are in English.
 - **Two built-in agents**, switchable with `Tab`:
   - `build` — default, full-access agent for development work
   - `plan` — read-only agent for analysis and code exploration

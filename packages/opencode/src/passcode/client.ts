@@ -162,7 +162,7 @@ export async function enforcePasscodeGate(): Promise<PasscodeStatus> {
       allowed: false,
       blocked: false,
       warn: false,
-      message: "Nta Passcode ihari. Nyamuneka ujye kwinjiza Passcode yawe.",
+      message: "No Passcode found. Please enter your Passcode.",
     }
   }
 
@@ -172,7 +172,7 @@ export async function enforcePasscodeGate(): Promise<PasscodeStatus> {
       allowed: false,
       blocked: true,
       warn: false,
-      message: "Igihe cy'igerageza cyarangiye.\nKugira ngo ukomeze gukoresha iCode, ugomba kwishyura 1,000 RWF no kubona Passcode.\nFungura browser kugira ngo ukomeze.",
+      message: "Your trial has ended.\nTo keep using iCode, pay 1,000 RWF and get a Passcode.\nOpen the browser to continue.",
     }
   }
 
@@ -187,14 +187,14 @@ export async function enforcePasscodeGate(): Promise<PasscodeStatus> {
         allowed: true,
         blocked: false,
         warn: true,
-        message: "Urimo mu buryo butari buffalo (offline): passcode yemejwe mu masaha 24 ashize.",
+        message: "Running offline: your passcode was validated within the last 24 hours.",
       }
     }
     return {
       allowed: false,
       blocked: true,
       warn: false,
-      message: "Ntibishoboka kwemeza passcode. Nyamuneka ugende ushimikije umurongo w'itumanaho.",
+      message: "Could not verify the passcode. Please check your internet connection.",
     }
   }
 
@@ -203,7 +203,7 @@ export async function enforcePasscodeGate(): Promise<PasscodeStatus> {
       allowed: false,
       blocked: true,
       warn: false,
-      message: serverStatus.message ?? "Uyu muyoboro (installation) warahagaritswe.",
+      message: serverStatus.message ?? "This device (installation) has been blocked.",
     }
   }
 
@@ -212,7 +212,7 @@ export async function enforcePasscodeGate(): Promise<PasscodeStatus> {
       allowed: false,
       blocked: true,
       warn: false,
-      message: serverStatus.message ?? "Uburenganzira bwo gukoresha iCode bwahagaritswe.\nNyamuneka hamagara Admin wa iCode.",
+      message: serverStatus.message ?? "Your access to iCode has been revoked.\nPlease contact the iCode admin.",
     }
   }
 
@@ -221,7 +221,7 @@ export async function enforcePasscodeGate(): Promise<PasscodeStatus> {
       allowed: false,
       blocked: true,
       warn: false,
-      message: serverStatus.message ?? "Igihe cy'igerageza cyarangiye.\nKugira ngo ukomeze gukoresha iCode, ugomba kwishyura 1,000 RWF no kubona Passcode.",
+      message: serverStatus.message ?? "Your trial has ended.\nTo keep using iCode, pay 1,000 RWF and get a Passcode.",
     }
   }
 
@@ -230,7 +230,7 @@ export async function enforcePasscodeGate(): Promise<PasscodeStatus> {
       allowed: false,
       blocked: true,
       warn: false,
-      message: serverStatus.message ?? "Passcode yawe ntabwo ikibaho. Nyamuneka wandikire abafasha.",
+      message: serverStatus.message ?? "Your Passcode is no longer valid. Please contact support.",
     }
   }
 
@@ -240,7 +240,7 @@ export async function enforcePasscodeGate(): Promise<PasscodeStatus> {
       allowed: false,
       blocked: true,
       warn: false,
-      message: "Igihe cy'igerageza cyarangiye.\nKugira ngo ukomeze gukoresha iCode, ugomba kwishyura 1,000 RWF no kubona Passcode.",
+      message: "Your trial has ended.\nTo keep using iCode, pay 1,000 RWF and get a Passcode.",
     }
   }
 
@@ -285,8 +285,8 @@ async function startTrialRequest(): Promise<TrialResponse | null> {
 async function openAccessWait(timeoutMs = 5 * 60_000): Promise<boolean> {
   const machineId = getMachineId()
   const url = `${CONTROL_URL}/access?machine=${encodeURIComponent(machineId)}`
-  console.log("\nFungura browser kugira ngo ujye kuzuza Passcode.")
-  console.log("Uzuza Passcode mu browser, hanyuma usubire muri terminal.\n")
+  console.log("\nOpening your browser so you can enter your Passcode.")
+  console.log("Enter the Passcode in the browser, then come back to the terminal.\n")
   await open(url).catch(() => undefined)
 
   const deadline = Date.now() + timeoutMs
@@ -330,7 +330,7 @@ export async function runPasscodeGate(): Promise<boolean> {
     // First run: silently start the free trial.
     const trialRes = await startTrialRequest()
     if (!trialRes) {
-      console.error("\nNtabwo dushobora kugera kuri iCode server. Reba ko umurongo w'itumanaho ukora, hanyuma ugerageze nanone.\n")
+      console.error("\nCould not reach the iCode server. Check your internet connection and try again.\n")
       return false
     }
     if (trialRes.trial_active && trialRes.expires_at) {
@@ -346,16 +346,16 @@ export async function runPasscodeGate(): Promise<boolean> {
       const remainingDays = Math.ceil(remainingMs / (1000 * 60 * 60 * 24))
       console.log("\n┌──────────────────────────────────────────┐")
       console.log("│                  iCode                   │")
-      console.log("│        Kinyarwanda Coding Agent         │")
+      console.log("│        iCode Coding Agent               │")
       console.log("└──────────────────────────────────────────┘\n")
-      console.log("✓ Murakaza neza kuri iCode!")
-      console.log(`  Ufite igihe cy'igerageza cy'ibyumweru 3 (free trial).`)
-      console.log(`  Igihe kigeze: ${expiresDate.toLocaleDateString()}`)
-      console.log(`  Iminsi: ${remainingDays}\n`)
+      console.log("✓ Welcome to iCode!")
+      console.log(`  You have a free 3-week trial.`)
+      console.log(`  Trial ends: ${expiresDate.toLocaleDateString()}`)
+      console.log(`  Days: ${remainingDays}\n`)
       showTrialEnabledWeb(trialRes.expires_at)
       return true
     }
-    console.log(`\n${trialRes.message ?? "Nta trial ihari. Nyamuneka wizihishe kugira ngo ukomeze."}\n`)
+    console.log(`\n${trialRes.message ?? "No trial available. Please pay to continue."}\n`)
   } else {
     // Re-check an existing passcode.
     const s = await enforcePasscodeGate()
@@ -371,14 +371,14 @@ export async function runPasscodeGate(): Promise<boolean> {
   if (activated) {
     console.log("\n┌──────────────────────────────────────────┐")
     console.log("│                  iCode                   │")
-    console.log("│        Kinyarwanda Coding Agent         │")
+    console.log("│        iCode Coding Agent               │")
     console.log("└──────────────────────────────────────────┘\n")
     console.log("✓ iCode Access Verified")
-    console.log("✓ Murakaza neza kuri iCode!")
-    console.log("✓ Ubu ushobora gukomeza gukoresha iCode.\n")
+    console.log("✓ Welcome to iCode!")
+    console.log("✓ You can now continue using iCode.\n")
     return true
   }
-  console.error("\nNtiwashoboye kwemeza uburenganzira. Gerageza nanone nyuma.\n")
+  console.error("\nCould not verify your access. Please try again later.\n")
   return false
 }
 

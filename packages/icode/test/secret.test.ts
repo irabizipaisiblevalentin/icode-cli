@@ -2,7 +2,7 @@ import { expect, test } from "bun:test"
 import { isLikelySecret, redactSecrets, redactKnownSecrets, redactEnvSecrets } from "../src/security/secret"
 
 test("isLikelySecret recognizes key prefixes and high-entropy tokens", () => {
-  expect(isLikelySecret("ejochat_xYzAbC1D2eF3gH4iJ5kLmNoPqRsTuVwX")).toBe(true)
+  expect(isLikelySecret("ghp_" + "xYzAbC1D2eF3gH4iJ5kLmNoPqRsTuVwX")).toBe(true)
   expect(isLikelySecret("sk-ant-" + "abc123def456ghi789jkl012mno345pqr678")).toBe(true)
   expect(isLikelySecret("xoxb-" + "1234567890-abcdefghijklmnopqrstuvwxyz")).toBe(true)
   expect(isLikelySecret("NotASecretValue")).toBe(false)
@@ -20,10 +20,10 @@ test("redactKnownSecrets removes specific values", () => {
 })
 
 test("redactEnvSecrets removes secret-like env values from text", () => {
-  const env = { EJOCHAT_API_KEY: "ejochat_xYzAbC1D2eF3gH4iJ5kLmNoPqRsTuVwX", OTHER: "visible" } as NodeJS.ProcessEnv
-  const text = "api key is ejochat_xYzAbC1D2eF3gH4iJ5kLmNoPqRsTuVwX keep it safe"
+  const env = { DEPLOY_TOKEN: "ghp_xYzAbC1D2eF3gH4iJ5kLmNoPqRsTuVwX", OTHER: "visible" } as NodeJS.ProcessEnv
+  const text = "api key is ghp_xYzAbC1D2eF3gH4iJ5kLmNoPqRsTuVwX keep it safe"
   const out = redactEnvSecrets(text, env)
-  expect(out).not.toContain("ejochat_")
+  expect(out).not.toContain("ghp_xYzAbC1D2eF3gH4iJ5kLmNoPqRsTuVwX")
   expect(out).toContain("keep it safe")
 })
 

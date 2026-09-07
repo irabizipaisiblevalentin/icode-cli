@@ -40,7 +40,7 @@ export const Cursor = Schema.Struct({
 }).annotate({ description: "Terminal cursor settings" })
 
 export const Language = Schema.Literals(["rw", "auto", "en"]).annotate({
-  description: "Interface language for iCode. Kinyarwanda (rw) is the default; 'auto' keeps the interface in Kinyarwanda",
+  description: "Interface language for iCode. English (en) is the default.",
 })
 export type Language = Schema.Schema.Type<typeof Language>
 
@@ -76,7 +76,7 @@ export const Info = Schema.Struct({
   scroll_acceleration: Schema.optional(ScrollAcceleration),
   diff_style: Schema.optional(DiffStyle),
   language: Schema.optional(Language).annotate({
-    description: "Interface language: rw (Kinyarwanda), en (English), or auto (rw interface)",
+    description: "Interface language: en (English), rw, or auto",
   }),
   cursor: Schema.optional(Cursor),
   mouse: Schema.optional(Schema.Boolean).annotate({ description: "Enable or disable mouse capture (default: true)" }),
@@ -135,7 +135,7 @@ export function resolve(input: Info, options: ResolveOptions): Resolved {
     }),
     leader_timeout: input.leader_timeout ?? LeaderTimeoutDefault,
     mouse: input.mouse ?? true,
-    language: input.language ?? "rw",
+    language: input.language ?? "en",
     cursor: input.cursor
       ? {
           style: input.cursor.style ?? "block",

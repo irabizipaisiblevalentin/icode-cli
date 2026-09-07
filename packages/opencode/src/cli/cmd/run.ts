@@ -25,7 +25,6 @@ import { Filesystem } from "@/util/filesystem"
 import { createOpencodeClient, type OpencodeClient, type ToolPart } from "@opencode-ai/sdk/v2"
 import { FormatError, FormatUnknownError } from "../error"
 import { INTERACTIVE_INPUT_ERROR, resolveInteractiveStdin } from "./run/runtime.stdin"
-import { Lang } from "@opencode-ai/tui/lang"
 
 type ModelInput = Parameters<OpencodeClient["session"]["prompt"]>[0]["model"]
 
@@ -48,36 +47,6 @@ function resolveRunInput(value?: string, piped?: string): string | undefined {
   }
 
   return value + "\n" + piped
-}
-
-/**
- * Kinyarwanda-first prompt preparation. When the user writes in Kinyarwanda
- * and EjoChat is configured (EJOCHAT_API_KEY), an optional bounded
- * "understanding" reminder is prepended so the coding model benefits from the
- * language service. The original user request is always kept verbatim.
- */
-async function prepareKinyarwanda(
-  message: string,
-  files: FilePart[],
-): Promise<{ parts: PromptPart[]; service: Lang.KinyarwandaService | undefined }> {
-  const detected = Lang.detectLanguage(message, "auto")
-  const parts: PromptPart[] = [...files]
-  if (detected !== "rw") {
-    return { parts: [...parts, { type: "text", text: message }], service: undefined }
-  }
-
-  const service = new Lang.KinyarwandaService({ config: Lang.ejoChatConfig(), env: process.env })
-  if (service.available()) {
-    const understanding = await service.understandKinyarwanda(message, Lang.extractIntent(message))
-    if (understanding.source === "ejochat" && understanding.explanation) {
-      parts.push({
-        type: "text",
-        text: `<system-reminder>Kinyarwanda understanding (iCode): ${understanding.explanation}\nThe original user request above remains authoritative.</system-reminder>`,
-      })
-    }
-  }
-
-  return { parts: [...parts, { type: "text", text: message }], service }
 }
 
 type FilePart = {
@@ -879,11 +848,7 @@ export const RunCommand = effectCmd({
 
         if (!interactive) {
           const events = await client.event.subscribe()
-          let lastAssistantText = ""
-          let kinyarwandaService: Lang.KinyarwandaService | undefined
-          const completed = loop(client, events, (text) => {
-            lastAssistantText = text
-          }).catch((e) => {
+          const completed = loop(client, events, () => {}).catch((e) => {
             console.error(e)
             process.exitCode = 1
           })
@@ -891,13 +856,6 @@ export const RunCommand = effectCmd({
             if (args.attach) return
             const error = await completed
             if (error) process.exitCode = 1
-            if (!kinyarwandaService || args.format === "json" || !lastAssistantText || !process.stdout.isTTY) return
-            const summary = await kinyarwandaService.summarizeInKinyarwanda(lastAssistantText)
-            if (!summary) return
-            UI.empty()
-            UI.println(`${UI.Style.TEXT_INFO_BOLD}⚡ iCode${UI.Style.TEXT_NORMAL}`)
-            UI.println(`${UI.Style.TEXT_DIM}${summary}${UI.Style.TEXT_NORMAL}`)
-            UI.empty()
           }
 
           if (args.command) {
@@ -919,8 +877,7 @@ export const RunCommand = effectCmd({
           }
 
           const model = pick(args.model)
-          const { parts, service: preparedService } = await prepareKinyarwanda(message, files)
-          kinyarwandaService = preparedService
+          const parts: PromptPart[] = [...files, { type: "text", text: message }]
           const result = await client.session.prompt({
             sessionID,
             agent,

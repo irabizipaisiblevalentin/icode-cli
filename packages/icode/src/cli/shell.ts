@@ -1,15 +1,13 @@
-import { loadConfig, apiKey, hasEjoChatKey, type ICodeConfig } from "../config"
+import { loadConfig, redactEnvSecrets, type ICodeConfig } from "../config"
 import { createTheme, type Theme } from "./theme"
 import { renderBox, success, error, warning, info, primary } from "./renderer"
 import { terminalInfo } from "./terminal"
 import { Spinner } from "./spinner"
 import { promptLine } from "./prompt"
-import { SLASH_COMMANDS, parseSlash, isLanguageArg, languageLabel, type SlashName } from "./slashes"
+import { SLASH_COMMANDS, parseSlash, languageLabel, type SlashName } from "./slashes"
 import { isDangerousCommand } from "./danger"
 import { readProjectInfo } from "../agent/context"
 import { runOpenCodePrompt, type AgentSignal } from "../agent/opencode-agent"
-import { KinyarwandaService } from "../language/kinyarwanda-service"
-import { detectLanguage, extractIntent } from "../language/detector"
 import { redactSecrets } from "../security/secret"
 
 const VERSION = "0.1.0"
@@ -17,7 +15,6 @@ const VERSION = "0.1.0"
 interface Session {
   config: ICodeConfig
   theme: Theme
-  kinyarwanda: KinyarwandaService
   directory: string
   history: string[]
   running: boolean
@@ -29,12 +26,10 @@ export async function runCLI(argv = process.argv.slice(2)): Promise<void> {
   const config = loadConfig()
   const theme = createTheme()
   const directory = process.cwd()
-  const kinyarwanda = new KinyarwandaService({ config, apiKey: apiKey(), env: process.env })
 
   const session: Session = {
     config,
     theme,
-    kinyarwanda,
     directory,
     history: [],
     running: false,
@@ -50,10 +45,7 @@ export async function runCLI(argv = process.argv.slice(2)): Promise<void> {
   }
 
   printBanner(session)
-  if (!hasEjoChatKey()) {
-    warning(render, "EjoChat ntabwo yashyizweho. Koresha EJOCHAT_API_KEY.")
-  }
-  info(render, "Koresha /help kugira ngo ubone amabwiriza.")
+  info(render, "Use /help to see all commands.")
 
   let ok = true
   while (ok) {
@@ -70,7 +62,7 @@ export async function runCLI(argv = process.argv.slice(2)): Promise<void> {
     session.history.push(trimmed)
     ok = await dispatch(session, trimmed)
   }
-  primary(render, "Muraho, murabeho! 👋")
+  primary(render, "Goodbye! 👋")
 }
 
 async function runInline(session: Session, prompt: string): Promise<void> {
@@ -91,15 +83,15 @@ function printBanner(session: Session): void {
 
   renderBox(
     { theme, width, out },
-    ` ${theme.paint("iCODE", "35")}${" ".repeat(Math.max(0, width - 12))}\n${" ".repeat(2)}Umufasha wo Kwandika Porogaramu${" ".repeat(Math.max(2, width - 34))}`,
+    ` ${theme.paint("iCODE", "35")}${" ".repeat(Math.max(0, width - 12))}\n${" ".repeat(2)}Software Coding Assistant${" ".repeat(Math.max(2, width - 34))}`,
     {},
   )
   out("")
-  info(render, `Umushinga: ${theme.paint(project.name, "1")}`)
-  info(render, `Dosiye: ${project.fileCount}`)
+  info(render, `Project: ${theme.paint(project.name, "1")}`)
+  info(render, `Files: ${project.fileCount}`)
   info(render, `Git branch: ${theme.paint(project.branch, "32")}`)
   out("")
-  out(`${theme.glyphs.primary} Muraho ${theme.glyphs.bullet} Niteguye kugufasha gukora kuri uyu mushinga.`)
+  out(`${theme.glyphs.primary} Hello ${theme.glyphs.bullet} I'm ready to help you work on this project.`)
   out("")
 }
 
@@ -107,7 +99,7 @@ async function dispatch(session: Session, input: string): Promise<boolean> {
   const parsed = parseSlash(input)
   if (parsed) {
     if (parsed.name) return handleSlash(session, parsed.name, parsed.arg)
-    renderBox(makeRender(session), `Ntiyabonetse: nta command ya "${input}". Koresha /help.`, { title: "Ikibazo", colorCode: "31" })
+    renderBox(makeRender(session), `No such command: "${input}". Use /help.`, { title: "Error", colorCode: "31" })
     return true
   }
   await handlePrompt(session, input)
@@ -118,13 +110,13 @@ async function handleSlash(session: Session, name: SlashName, arg: string | unde
   const render = makeRender(session)
   switch (name) {
     case "help": {
-      out(session, "Amabwiriza ya iCode:")
+      out(session, "iCode commands:")
       for (const cmd of SLASH_COMMANDS) {
         const args = cmd.args ? ` ${cmd.args.join("|")}` : ""
         out(session, `  ${session.theme.paint(`/${cmd.name}${args}`, "36")} — ${cmd.description}`)
       }
       out(session, "")
-      out(session, "iCode ni Irabizi Paisible Valentin.")
+      out(session, "iCode by Irabizi Paisible Valentin.")
       return true
     }
     case "exit":
@@ -139,31 +131,16 @@ async function handleSlash(session: Session, name: SlashName, arg: string | unde
       return true
     case "status": {
       const project = readProjectInfo(session.directory)
-      info(render, `Umushinga: ${project.name} (${project.fileCount} dosiye, branch: ${project.branch})`)
-      info(render, `Ururimi: ${languageLabel(session.config.language)}`)
-      info(render, `EjoChat: ${hasEjoChatKey() ? "yashyizweho" : "ntayo key"}`)
-      info(render, `Model ya EjoChat: ${session.config.ejochatModel}`)
-      return true
-    }
-    case "language": {
-      if (!arg) {
-        info(render, `Ururimi ruturikwa: ${languageLabel(session.config.language)}. Koresha /language rw|auto|en.`)
-        return true
-      }
-      if (isLanguageArg(arg)) {
-        session.config = { ...session.config, language: arg }
-        info(render, `Ururimi rwahindutse: ${languageLabel(arg)}.`)
-      } else {
-        error(render, `Ururimi "rw", "auto" cyangwa "en" gusa.`)
-      }
+      info(render, `Project: ${project.name} (${project.fileCount} files, branch: ${project.branch})`)
+      info(render, `Language: ${languageLabel(session.config.language)}`)
+      info(render, `Config: ~/.config/icode/config.{json,jsonc,toml,yaml}`)
       return true
     }
     case "model":
-      info(render, `Model ya EjoChat: ${session.config.ejochatModel}`)
+      info(render, "Uses your configured model via OpenCode.")
       return true
     case "config":
       info(render, `Config: ~/.config/icode/config.{json,jsonc,toml,yaml}`)
-      info(render, `EJOCHAT_BASE_URL: ${session.config.ejochatBaseUrl}`)
       return true
     default:
       return true
@@ -176,8 +153,7 @@ function out(session: Session, text: string): void {
 
 /**
  * Middleware pipeline (spec section 5):
- *   input -> detect -> Kinyarwanda understanding -> intent -> OpenCode agent ->
- *   technical result -> EjoChat Kinyarwanda explanation -> renderer.
+ *   input -> OpenCode agent -> technical result -> renderer.
  */
 async function handlePrompt(session: Session, input: string): Promise<void> {
   const render = makeRender(session)
@@ -185,36 +161,20 @@ async function handlePrompt(session: Session, input: string): Promise<void> {
 
   // Safety: confirm potentially destructive commands before execution (spec 10).
   if (isDangerousCommand(input) && session.config.confirmDangerous) {
-    warning(render, "Iri tegeko rishobora guhindura cyangwa gusiba amakuru.")
+    warning(render, "This command could modify or delete data.")
     out(session, `  ${theme.paint(input, "1")}`)
     out(session, "")
-    const { line } = await promptLine({ theme, prefix: "Urashaka gukomeza? [y/N] " })
+    const { line } = await promptLine({ theme, prefix: "Continue? [y/N] " })
     const answer = line.trim().toLowerCase()
     if (answer !== "y" && answer !== "yes") {
-      info(render, "Byahagaritswe.")
+      info(render, "Cancelled.")
       return
     }
   }
 
-  // 1) Language detection + intent extraction.
-  const language = detectLanguage(input, session.config.language)
-  const intent = extractIntent(input)
-  const isRw = language === "rw"
-
-  // 2) Kinyarwanda understanding (EjoChat) for rw requests — never for code.
+  // Send to OpenCode agent.
   const spinner = new Spinner({ theme, out: (t) => process.stdout.write(t) })
-  if (isRw && session.config.language !== "en") {
-    spinner.start("Ndimo gusobanukirwa no gusesengura icyifuzo cyawe...")
-    const understanding = await session.kinyarwanda.understandKinyarwanda(input, JSON.stringify(intent))
-    spinner.stop()
-    if (understanding.source === "ejochat") {
-      info(render, "Nsobanukiwe icyifuzo cyawe.")
-    }
-  }
-
-  // 3) Send to OpenCode agent. Protect technical tokens only for the EjoChat explanation path;
-  //    OpenCode receives the original (technical identifiers stay intact).
-  spinner.start("Ndimo gukora...")
+  spinner.start("Working...")
   session.running = true
   const abort = new AbortController()
   session.abort = abort
@@ -231,16 +191,7 @@ async function handlePrompt(session: Session, input: string): Promise<void> {
   streaming.flush()
   session.lastResult = technical
 
-  // 4) Kinyarwanda explanation of the technical result (EjoChat language layer).
-  if (isRw && session.config.language !== "en") {
-    const explanation = await session.kinyarwanda.explainInKinyarwanda(technical, input)
-    if (explanation) {
-      renderBox({ theme, width, out: process.stdout.write.bind(process.stdout) }, explanation, { title: "Igisubizo", colorCode: "36" })
-      out(session, "")
-    }
-  }
-
-  success(render, "Byakozwe neza.")
+  success(render, "Done.")
 }
 
 function onAgentSignal(session: Session, signal: AgentSignal, streaming: StreamingWriter, spinner: Spinner): void {
@@ -258,15 +209,15 @@ function onAgentSignal(session: Session, signal: AgentSignal, streaming: Streami
       streaming.write(`\n${signal.text}`)
       return
     case "tool-start":
-      spinner.update(`Ndimo gukoresha: ${signal.tool}`)
+      spinner.update(`Using: ${signal.tool}`)
       return
     case "tool-end":
       spinner.stop()
-      info(render, `Byakozwe: ${signal.tool}`)
+      info(render, `Done: ${signal.tool}`)
       return
     case "tool-error":
       spinner.stop()
-      warning(render, `Ikibazo muri: ${signal.tool}`)
+      warning(render, `Problem in: ${signal.tool}`)
       return
     case "error":
       spinner.stop()
@@ -281,8 +232,8 @@ function handleFailure(session: Session, technical: string): void {
   const render = makeRender(session)
   renderBox(
     { ...render, out: process.stdout.write.bind(process.stdout) },
-    `Ntibyashobotse gukora icyifuzo cyawe.\n\nImpamvu: ${redactSecrets(technical.slice(0, 200))}\n\nReba niba amabwiriza cyangwa uburenganzira biriho neza.`,
-    { title: "Ikibazo", colorCode: "31" },
+    `Could not complete your request.\n\nReason: ${redactSecrets(technical.slice(0, 200))}\n\nCheck that the command and permissions are correct.`,
+    { title: "Error", colorCode: "31" },
   )
   out(session, "")
   if (session.config.debug) {

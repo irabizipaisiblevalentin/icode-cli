@@ -197,7 +197,7 @@ function build(input: SplashWriterInput, kind: "entry" | "exit", ctx: Scrollback
     push(lines, body_left, top, "iCode", right, undefined, TextAttributes.BOLD)
 
     const tagline = Locale.truncateMiddle(
-      "⚡ Kinyarwanda Edition · By Irabizi Paisible Valentin",
+      "⚡ Coding Agent · By Irabizi Paisible Valentin",
       Math.max(1, width - body_left),
     )
     push(lines, body_left, top + 1, tagline, left, undefined, TextAttributes.DIM)

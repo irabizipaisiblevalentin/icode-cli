@@ -31,24 +31,24 @@ test("countAnsiLength ignores ANSI codes", () => {
 })
 
 test("parseSlash recognizes commands and args", () => {
-  expect(parseSlash("/language rw")).toEqual({ name: "language", arg: "rw" })
+  expect(parseSlash("/help extra")).toEqual({ name: "help", arg: "extra" })
   expect(parseSlash("/clear")?.name).toBe("clear")
   expect(parseSlash("just a normal hi")).toBeNull()
   expect(parseSlash("/unknowncmd")?.name).toBeUndefined()
 })
 
 test("isLanguageArg and languageLabel", () => {
-  expect(isLanguageArg("rw")).toBe(true)
+  expect(isLanguageArg("en")).toBe(true)
   expect(isLanguageArg("fr")).toBe(false)
-  expect(languageLabel("rw")).toBe("Kinyarwanda")
+  expect(languageLabel("en")).toBe("English")
 })
 
-test("SLASH_COMMANDS have Kinyarwanda descriptions", () => {
+test("SLASH_COMMANDS are all described in English", () => {
   for (const cmd of SLASH_COMMANDS) {
     expect(cmd.description.length).toBeGreaterThan(0)
   }
   const exit = SLASH_COMMANDS.find((c) => c.name === "exit")!
-  expect(exit.description).toContain("Sohoka")
+  expect(exit.description).toBe("Exit iCode.")
 })
 
 test("dangerous command detection", () => {

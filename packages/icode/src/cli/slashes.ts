@@ -4,7 +4,6 @@ export type SlashName =
   | "help"
   | "status"
   | "model"
-  | "language"
   | "config"
   | "clear"
   | "exit"
@@ -12,21 +11,20 @@ export type SlashName =
 
 export interface SlashCommand {
   name: SlashName
-  /** Kinyarwanda description shown in /help (spec section 9). */
+  /** Description shown in /help (spec section 9). */
   description: string
-  /** Optional arguments, e.g. rw/auto/en for /language. */
+  /** Optional arguments. */
   args?: string[]
 }
 
 export const SLASH_COMMANDS: SlashCommand[] = [
-  { name: "help", description: "Erekana amabwiriza yose ya iCode." },
-  { name: "status", description: "Erekana uko umushinga umeze." },
-  { name: "model", description: "Reba wende muri model ikoreshwa." },
-  { name: "language", description: "Hitamo ururimi: rw, auto cyangwa en.", args: ["rw", "auto", "en"] },
-  { name: "config", description: "Reba ahantu iCode ibitswe config." },
-  { name: "clear", description: "Siba ibyo bigaragara kuri terminal." },
-  { name: "exit", description: "Sohoka muri iCode." },
-  { name: "version", description: "Erekana version ya iCode." },
+  { name: "help", description: "Show all iCode commands." },
+  { name: "status", description: "Show the status of the project." },
+  { name: "model", description: "Show the model in use." },
+  { name: "config", description: "Show where iCode stores its config." },
+  { name: "clear", description: "Clear the terminal." },
+  { name: "exit", description: "Exit iCode." },
+  { name: "version", description: "Show the iCode version." },
 ]
 
 export function parseSlash(input: string): { name?: SlashName; arg?: string } | null {
@@ -42,16 +40,9 @@ export function parseSlash(input: string): { name?: SlashName; arg?: string } | 
 }
 
 export function isLanguageArg(arg: string): arg is LanguageMode {
-  return arg === "rw" || arg === "auto" || arg === "en"
+  return arg === "en"
 }
 
 export function languageLabel(mode: LanguageMode): string {
-  switch (mode) {
-    case "rw":
-      return "Kinyarwanda"
-    case "en":
-      return "English"
-    case "auto":
-      return "Auto (gutahura ururimi)"
-  }
+  return "English"
 }

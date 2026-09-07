@@ -2,7 +2,7 @@
   "$schema": "https://json.schemastore.org/package.json",
   "name": "@vln.codes__/icode",
   "version": "1.1.0",
-  "description": "iCode — a fast, native AI coding agent with a Kinyarwanda-first experience. Install globally to run `icode`.",
+  "description": "iCode — a fast, native AI coding agent. Install globally to run `icode`.",
   "license": "MIT",
   "type": "module",
   "bin": {

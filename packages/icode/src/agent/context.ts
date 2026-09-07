@@ -26,7 +26,7 @@ export function readProjectInfo(directory: string): ProjectInfo {
     fileCount = 0
   }
   const branch = safeGit(directory, ["branch", "--show-current"]) || safeGit(directory, ["rev-parse", "--short", "HEAD"]) || "main"
-  return { name: basename(directory) || "umushinga", fileCount, branch, directory }
+  return { name: basename(directory) || "project", fileCount, branch, directory }
 }
 
 function countProjectFiles(dir: string, depth: number): number {

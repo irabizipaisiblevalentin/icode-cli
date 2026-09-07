@@ -2,11 +2,9 @@ import { createSignal } from "solid-js"
 import type { LanguageMode } from "./config"
 
 /**
- * iCode's Kinyarwanda-first UI strings. The dictionary defaults to natural
- * Kinyarwanda (the product identity); the /language command can switch the
- * whole surface to English. Technical terms, file paths, commands and code
- * are never translated — they stay exactly as the user or engine produced
- * them.
+ * iCode's UI strings. iCode is an English-first product; technical terms, file
+ * paths, commands and code are never translated — they stay exactly as the
+ * user or engine produced them.
  */
 
 export type TranslationKey =
@@ -96,72 +94,21 @@ const en: Record<TranslationKey, string> = {
   creatingWorkspace: "Creating workspace...",
   connectProvider: "Connect a provider to send prompts",
   noModel: "No model selected",
-  greeting: "Muraho 👋 Ndi iCode. Niteguye kugufasha gukora kuri uyu mushinga.",
-  bye: "Muraho, murabeho! 👋",
+  greeting: "Hello 👋 I am iCode. I'm ready to help you work on this project.",
+  bye: "Goodbye! 👋",
   docs: "Open docs",
   language: "Language",
   "language.current": "Language: {}",
   "language.updated": "Language set to {}",
-  "language.argHint": "Use /language rw|en|auto",
-  unsupported: "Invalid language. Use rw, en or auto.",
+  "language.argHint": "Language is set to English",
+  unsupported: "Invalid language.",
 }
 
-const rw: Record<TranslationKey, string> = {
-  thinking: "Ndimo gutekereza",
-  thought: "Ibitekerezo",
-  working: "Ndimo gukora",
-  completed: "Byarangiye",
-  error: "Ikibazo",
-  warning: "Iburira",
-  cancel: "Hagarika",
-  continue: "Komeza",
-  exit: "Sohoka",
-  help: "Ubufasha",
-  "help.body": "Kanda {} kugira ngo ubone ibikorwa n'amabwiriza byose bihari muri iyi context.",
-  "help.close": "Funga ubufasha",
-  "help.ok": "yego",
-  settings: "Igenamiterere",
-  askAnything: "Baza icyo ushaka...",
-  runACommand: "Koresha itegeko...",
-  readingFile: "Ndimo gusoma dosiye...",
-  loadedFile: "Yasomwe",
-  searchingContent: "Ndimo gushakisha ibiri muri dosiye...",
-  searchingWeb: "Ndimo gushakisha ku rubuga...",
-  fetchingWeb: "Ndimo gutora ibintu kuri interineti...",
-  writingCommand: "Ndimo kwandika itegeko...",
-  findingFiles: "Ndimo gushakisha amadosiye...",
-  preparingWrite: "Ndimo kwitegura kwandika...",
-  preparingEdit: "Ndimo kwitegura guhindura...",
-  preparingPatch: "Ndimo kwitegura patch...",
-  updatingTodos: "Ndimo guhindura urutonde rw'ibikorwa...",
-  delegating: "Ndimo kohereza akazi...",
-  askingQuestions: "Ndimo kubaza ibibazo...",
-  loadingSkill: "Ndimo gushyiramo ubumenyi...",
-  runningIn: "Irimo gukora muri",
-  wrote: "Byanditswe",
-  copiedToClipboard: "Byafashwe ku rupapuro (clipboard)",
-  loadingPlugins: "Ndimo gushyiramo plugins...",
-  finishingStartup: "Ndimo gusoza gutangiza...",
-  creatingWorkspace: "Ndimo gushyiraho places...",
-  connectProvider: "Komeza icyo ushaka kugira ngo ukoze",
-  noModel: "Nta model yatoranyijwe",
-  greeting: "Muraho 👋 Ndi iCode. Niteguye kugufasha gukora kuri uyu mushinga.",
-  bye: "Muraho, murabeho! 👋",
-  docs: "Amabwiriza (docs)",
-  language: "Ururimi",
-  "language.current": "Ururimi: {}",
-  "language.updated": "Ururimi rwahindutse: {}",
-  "language.argHint": "Koresha /language rw|en|auto",
-  unsupported: "Ururimi ntabwo ruzwi. Koresha rw, en cyangwa auto.",
-}
-
-const dictionaries: Record<LanguageMode, Record<TranslationKey, string>> = {
-  rw,
+const dictionaries: Partial<Record<LanguageMode, Record<TranslationKey, string>>> = {
   en,
-  auto: rw,
 }
 
-const [language, setLanguage] = createSignal<LanguageMode>("rw")
+const [language, setLanguage] = createSignal<LanguageMode>("en")
 
 export { language }
 
@@ -171,7 +118,7 @@ export function updateLanguage(mode: LanguageMode) {
 
 export function translate(key: TranslationKey, replace?: string): string {
   const dict = dictionaries[language()]
-  let value = dict[key] ?? en[key] ?? key
+  let value = dict?.[key] ?? en[key] ?? key
   if (replace !== undefined) value = value.replace("{}", replace)
   return value
 }

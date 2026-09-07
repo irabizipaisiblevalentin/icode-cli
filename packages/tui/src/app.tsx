@@ -66,7 +66,7 @@ import { ArgsProvider, useArgs, type Args } from "./context/args"
 import open from "open"
 import { PromptRefProvider, usePromptRef } from "./context/prompt"
 import { TuiConfigProvider, useTuiConfig, type TuiConfig } from "./config"
-import { updateLanguage, isLanguageMode, language, t } from "./lang"
+import { updateLanguage, isLanguageMode, t } from "./lang"
 import { createTuiApiAdapters } from "./plugin/adapters"
 import { createTuiApi } from "./plugin/api"
 import { createPluginRuntime, PluginRuntimeProvider, usePluginRuntime, type TuiPluginHost } from "./plugin/runtime"
@@ -789,32 +789,6 @@ function App(props: { onSnapshot?: () => Promise<string[]>; pluginHost: TuiPlugi
         category: "System",
       },
       {
-        name: "lang.set",
-        title: t("language"),
-        desc: `${t("language.argHint")} - ${t("language.current", language())}`,
-        slashName: "language",
-        slashAliases: ["lang", "ururimi"],
-        run: () => {
-          const raw = (promptRef.current?.current.input ?? "").trim()
-          const arg = raw.split(/\s+/).slice(1).join(" ").trim().toLowerCase()
-          if (arg && isLanguageMode(arg)) {
-            applyLanguage(arg)
-            return
-          }
-          if (!arg) {
-            applyLanguage(nextLanguage(language()))
-            return
-          }
-          toast.show({
-            variant: "warning",
-            message: `${t("unsupported")} ${t("language.argHint")}`,
-            duration: 5000,
-          })
-          dialog.clear()
-        },
-        category: "System",
-      },
-      {
         name: "theme.switch_mode",
         title: mode() === "dark" ? "Switch to light mode" : "Switch to dark mode",
         run: () => {
@@ -1032,20 +1006,9 @@ function App(props: { onSnapshot?: () => Promise<string[]>; pluginHost: TuiPlugi
     })
   })
 
-  const nextLanguage = (mode: "rw" | "auto" | "en") => (mode === "rw" ? "en" : mode === "en" ? "auto" : "rw")
-  const applyLanguage = (mode: "rw" | "auto" | "en") => {
-    updateLanguage(mode)
-    kv.set("language", mode)
-    toast.show({
-      variant: "info",
-      message: t("language.updated", mode),
-      duration: 3000,
-    })
-    dialog.clear()
-  }
   createEffect(() => {
     const saved = kv.get("language")
-    updateLanguage(isLanguageMode(saved) ? saved : (tuiConfig.language ?? "rw"))
+    updateLanguage(isLanguageMode(saved) ? saved : (tuiConfig.language ?? "en"))
   })
 
   createEffect(() => {

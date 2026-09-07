@@ -21,8 +21,8 @@ export interface OpenCodeAgentOptions {
 
 /**
  * Drives OpenCode (the real coding engine) for a single prompt in the given
- * project directory. EjoChat is NOT involved here: this is the code/tool
- * execution layer (files, terminal, Git, code generation).
+ * project directory. This is the code/tool execution layer (files, terminal,
+ * Git, code generation).
  */
 export async function runOpenCodePrompt(prompt: string, options: OpenCodeAgentOptions): Promise<string> {
   const { directory, onSignal } = options
@@ -81,7 +81,7 @@ function handleEvent(
 ): Effect.Effect<void> {
   switch (event.type) {
     case "session.next.text.started":
-      onSignal({ type: "status", text: "Ndimo kwandika igisubizo..." })
+      onSignal({ type: "status", text: "Writing response..." })
       return Effect.void
     case "session.next.text.delta":
       collected.push(event.data.delta)

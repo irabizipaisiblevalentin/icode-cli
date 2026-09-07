@@ -17,12 +17,12 @@ function entropy(value: string): number {
 
 /**
  * True if a string looks like a secret: has a known secret prefix, is a long
- * high-entropy token, or matches common credential shapes. Used to avoid
- * sending secrets to EjoChat and to redact them from logs/UI.
+ * high-entropy token, or matches common credential shapes. Used to redact them
+ * from logs/UI.
  */
 export function isLikelySecret(value: string): boolean {
   if (value.length < 8) return false
-  if (/^(sk|pk|ghp|gho|ghu|ghs|xox[baprs]-|AKIA[0-9A-Z]{16}|ejochat_)\S+/i.test(value)) return true
+  if (/^(sk|pk|ghp|gho|ghu|ghs|xox[baprs]-|AKIA[0-9A-Z]{16})\S+/i.test(value)) return true
   if (/\b(api[_-]?key|secret|token|password|passwd|credential)\b\s*[:=]\s*\S+/i.test(value)) return true
   // High-entropy tokens that look like credentials: no spaces, mixed case/digits
   // and reasonably long. Sentences with spaces and common words are not secrets.

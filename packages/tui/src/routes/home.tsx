@@ -12,15 +12,10 @@ import { useEditorContext } from "../context/editor"
 import { useTerminalDimensions } from "@opentui/solid"
 import { useTuiConfig } from "../config"
 import { HomeSessionDestinationProvider } from "./home/session-destination"
-import { language } from "../lang"
 
 let once = false
 const placeholder = {
   normal: ["Fix a TODO in the codebase", "What is the tech stack of this project?", "Fix broken tests"],
-  shell: ["ls -la", "git status", "pwd"],
-}
-const placeholderRw = {
-  normal: ["Kosha bug muri uyu mushinga", "Ni ayahe mazu tekinoloji y'uyu mushinga?", "Kosha ibizamini bitabaye"],
   shell: ["ls -la", "git status", "pwd"],
 }
 
@@ -40,7 +35,7 @@ export function Home() {
     if (configured === "auto") return Math.max(75, Math.floor(dimensions().width * 0.7))
     return configured ?? 75
   })
-  const placeholders = createMemo(() => (language() === "en" ? placeholder : placeholderRw))
+  const placeholders = createMemo(() => placeholder)
   let sent = false
 
   onMount(() => {
