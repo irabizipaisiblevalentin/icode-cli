@@ -1,12 +1,11 @@
 # iCode
 
-iCode is a Kinyarwanda-first AI coding agent built on the OpenCode engine.
-It reads, writes, edits, runs commands, and searches your code — and speaks
-Kinyarwanda by default.
+iCode is an English-first AI coding agent built on the OpenCode engine.
+It reads, writes, edits, runs commands, and searches your code — and always
+answers in English.
 
-- **Kinyarwanda-first**: the interface and prompts default to Kinyarwanda
-  (`/language rw|en|auto`).
-- **EjoChat intelligence**: set `EJOCHAT_API_KEY` to enable Kinyarwanda
+- **English-first**: the interface and prompts are English only (`/language en`).
+- **EjoChat intelligence**: set `EJOCHAT_API_KEY` to enable additional
   language understanding and summaries. EjoChat never runs coding tools and
   never sees your API keys.
 - **Fully offline-capable coding core**: files, terminal, Git, and code
@@ -26,10 +25,10 @@ bun dev
 bun --cwd packages/opencode --conditions=browser src/index.ts
 
 # Single prompt
-icode run "Kosha bug muri src/main.ts"
+icode run "Fix the bug in src/main.ts"
 
-# Set your interface language
-/language rw|en|auto
+# Show the interface language
+/language en
 ```
 
 Config lives in `~/.config/icode`. The environment variable `ICODE_CONFIG_DIR`

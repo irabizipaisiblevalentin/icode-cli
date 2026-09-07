@@ -3,10 +3,10 @@
   // iCode configuration. Env vars override these values.
   // All values are optional; defaults shown.
 
-  // "rw" (default), "auto", or "en"
-  "language": "rw",
+  // "en" (default and only option)
+  "language": "en",
 
-  // Show technical details (works without this; errors are already Kinyarwanda).
+  // Show technical details.
   "debug": false,
 
   // Confirm dangerous commands before running.

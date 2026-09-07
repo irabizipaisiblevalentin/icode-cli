@@ -4,23 +4,23 @@ import { parseSimpleToml, parseSimpleYaml, stripCommentsAndParseJson } from "../
 test("stripCommentsAndParseJson parses JSONC with comments and trailing commas", () => {
   const out = stripCommentsAndParseJson(`{
     // comment
-    "language": "rw",
+    "language": "en",
     "debug": false,
   }`) as Record<string, unknown>
-  expect(out.language).toBe("rw")
+  expect(out.language).toBe("en")
   expect(out.debug).toBe(false)
 })
 
 test("parseSimpleToml parses tables and values", () => {
   const t = parseSimpleToml(`
-language = "auto"
+language = "en"
 debug = true
 
 [ejochat]
 baseUrl = "https://x.example/v1"
 model = "m1"
 `) as Record<string, unknown>
-  expect(t.language).toBe("auto")
+  expect(t.language).toBe("en")
   expect((t.ejochat as Record<string, unknown>).model).toBe("m1")
   expect((t.ejochat as Record<string, unknown>).baseUrl).toBe("https://x.example/v1")
 })

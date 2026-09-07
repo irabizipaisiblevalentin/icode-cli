@@ -107,7 +107,7 @@ function handleEvent(
 }
 
 function toolName(toolNames: Map<string, string>, callID: string): string {
-  return toolNames.get(callID) ?? "igikoresho"
+  return toolNames.get(callID) ?? "tool"
 }
 
 function extractFinalText(context: readonly unknown[]): string {
