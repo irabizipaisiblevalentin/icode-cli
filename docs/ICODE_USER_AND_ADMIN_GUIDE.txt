@@ -40,7 +40,7 @@ VERIFY THE INSTALL
 ------------------
     icode --version
 
-Expected output:  1.1.0
+Expected output:  1.1.2
 
 If you get "command not found", see Troubleshooting at the end.
 
@@ -144,10 +144,13 @@ Open your browser and go to:
 
     https://icode-s05p.onrender.com/admin
 
-Log in with the ADMIN credential kept in (on the server machine):
+Log in with the ADMIN credential (the ADMIN_TOKEN) shown below, also
+kept on the server machine in:
     /home/valentin/icode/icode-control-deploy/data/.env.runtime
 
-(That file is private — never share ADMIN_TOKEN or WEBHOOK_SECRET.)
+    ADMIN_TOKEN = 6b28352f996a68db76fbd275c63675895cf002f91a49e39b2f2f912e4d1e8b1d
+
+(That file/credential is private — never share ADMIN_TOKEN or WEBHOOK_SECRET.)
 
 WHAT YOU DO, EVERY DAY
 ----------------------

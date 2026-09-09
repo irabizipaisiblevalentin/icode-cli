@@ -1,11 +1,12 @@
 import { Database } from "bun:sqlite"
-import { randomUUID } from "crypto"
+import { createHash, randomInt, randomUUID } from "crypto"
 import { mkdirSync } from "fs"
 import { join } from "path"
 
 const DB_PATH = process.env.DB_PATH ?? (process.env.DATA_DIR ? join(process.env.DATA_DIR, "icode-control.db") : "./icode-control.db")
 
 export const ACCESS_DURATION_DAYS = parseInt(process.env.ICODE_ACCESS_DURATION_DAYS ?? "30")
+export const TRIAL_DURATION_DAYS = parseInt(process.env.ICODE_TRIAL_DURATION_DAYS ?? "21")
 export const PAYMENT_AMOUNT_RWF = 1000
 
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET
@@ -38,6 +39,7 @@ function init(db: Database) {
     CREATE TABLE IF NOT EXISTS passcodes (
       id TEXT PRIMARY KEY,
       code TEXT UNIQUE NOT NULL,
+      code_hash TEXT UNIQUE NOT NULL,
       type TEXT NOT NULL CHECK(type IN ('public','personal')),
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       expires_at TEXT NOT NULL,
@@ -74,6 +76,7 @@ function init(db: Database) {
       last_seen_at TEXT NOT NULL DEFAULT (datetime('now')),
       blocked INTEGER NOT NULL DEFAULT 0,
       block_reason TEXT,
+      trial_started_at TEXT,
       FOREIGN KEY (passcode_id) REFERENCES passcodes(id)
     )
   `)
@@ -85,6 +88,15 @@ function init(db: Database) {
       seconds_used REAL NOT NULL DEFAULT 0,
       FOREIGN KEY (install_id) REFERENCES installs(id),
       UNIQUE(install_id, period_key)
+    )
+  `)
+  db.run(`
+    CREATE TABLE IF NOT EXISTS trial_alerts (
+      machine_id TEXT PRIMARY KEY,
+      passcode_id TEXT,
+      expires_at TEXT,
+      notified_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (passcode_id) REFERENCES passcodes(id)
     )
   `)
   db.run(`CREATE INDEX IF NOT EXISTS idx_passcodes_code ON passcodes(code)`)
@@ -125,11 +137,27 @@ function init(db: Database) {
   db.run(`CREATE INDEX IF NOT EXISTS idx_payment_requests_status ON payment_requests(status)`)
   db.run(`CREATE INDEX IF NOT EXISTS idx_passcodes_payment ON passcodes(payment_request_id)`)
 
-  // Migration: add payment_request_id column to existing passcodes tables
+  // Migrations for passcodes created by earlier versions of the table
   const cols = db.query(`PRAGMA table_info(passcodes)`).all() as { name: string }[]
   if (!cols.some((c) => c.name === "payment_request_id")) {
     db.run(`ALTER TABLE passcodes ADD COLUMN payment_request_id TEXT`)
   }
+  if (!cols.some((c) => c.name === "code_hash")) {
+    db.run(`ALTER TABLE passcodes ADD COLUMN code_hash TEXT`)
+    // Backfill hashes for any pre-existing plaintext codes.
+    const rows = db.query<{ id: string; code: string }, []>(`SELECT id, code FROM passcodes WHERE code_hash IS NULL`).all()
+    for (const row of rows) {
+      db.run(`UPDATE passcodes SET code_hash = ? WHERE id = ?`, [hashCode(row.code), row.id])
+    }
+  }
+  const installCols = db.query(`PRAGMA table_info(installs)`).all() as { name: string }[]
+  if (!installCols.some((c) => c.name === "trial_started_at")) {
+    db.run(`ALTER TABLE installs ADD COLUMN trial_started_at TEXT`)
+  }
+  if (!installCols.some((c) => c.name === "hardware_id")) {
+    db.run(`ALTER TABLE installs ADD COLUMN hardware_id TEXT`)
+  }
+  db.run(`CREATE INDEX IF NOT EXISTS idx_installs_hardware ON installs(hardware_id)`)
 }
 
 // ─── Passcodes ────────────────────────────────────────────────────────
@@ -137,6 +165,7 @@ function init(db: Database) {
 export interface PasscodeRow {
   id: string
   code: string
+  code_hash: string
   type: "public" | "personal"
   created_at: string
   expires_at: string
@@ -159,8 +188,8 @@ export function createPasscode(opts: {
   const id = randomUUID()
   const code = opts.code ?? randomCode()
   d.run(
-    `INSERT INTO passcodes (id, code, type, expires_at, max_uses, note, payment_request_id) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [id, code, opts.type, opts.expires_at, opts.max_uses ?? null, opts.note ?? null, opts.payment_request_id ?? null],
+    `INSERT INTO passcodes (id, code, code_hash, type, expires_at, max_uses, note, payment_request_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, code, hashCode(code), opts.type, opts.expires_at, opts.max_uses ?? null, opts.note ?? null, opts.payment_request_id ?? null],
   )
   return getPasscode(id)!
 }
@@ -170,7 +199,8 @@ export function getPasscode(id: string): PasscodeRow | null {
 }
 
 export function findPasscodeByCode(code: string): PasscodeRow | null {
-  return db().query<PasscodeRow, [string]>(`SELECT * FROM passcodes WHERE code = ?`).get(code) ?? null
+  const hash = hashCode(code)
+  return db().query<PasscodeRow, [string]>(`SELECT * FROM passcodes WHERE code_hash = ?`).get(hash) ?? null
 }
 
 export function listPasscodes(): PasscodeRow[] {
@@ -271,6 +301,7 @@ export function deleteCustomer(id: string) {
 export interface InstallRow {
   id: string
   machine_id: string
+  hardware_id: string | null
   platform: string
   arch: string
   version: string | null
@@ -279,10 +310,12 @@ export interface InstallRow {
   last_seen_at: string
   blocked: number
   block_reason: string | null
+  trial_started_at: string | null
 }
 
 export function upsertInstall(opts: {
   machine_id: string
+  hardware_id?: string
   platform: string
   arch: string
   version?: string
@@ -290,23 +323,59 @@ export function upsertInstall(opts: {
 }): InstallRow {
   const d = db()
   const existing = d.query<InstallRow, [string]>(`SELECT * FROM installs WHERE machine_id = ?`).get(opts.machine_id)
-  if (existing) {
+
+  // The machine_id is new (often after a reinstall wiped the state folder), but
+  // the same PC may already be known by its hardware fingerprint. In that case
+  // adopt the existing install (keeping its trial/passcode/history) instead of
+  // creating a duplicate that could restart the free trial.
+  const knownByHardware =
+    !existing && opts.hardware_id
+      ? d.query<InstallRow, [string]>(`SELECT * FROM installs WHERE hardware_id = ?`).get(opts.hardware_id)
+      : null
+
+  if (existing || knownByHardware) {
+    const row = existing ?? knownByHardware!
+    const hardwareId = opts.hardware_id || row.hardware_id
     d.run(
-      `UPDATE installs SET platform = ?, arch = ?, version = ?, passcode_id = ?, last_seen_at = datetime('now') WHERE machine_id = ?`,
-      [opts.platform, opts.arch, opts.version ?? existing.version, opts.passcode_id ?? existing.passcode_id, opts.machine_id],
+      `UPDATE installs SET machine_id = ?, hardware_id = ?, platform = ?, arch = ?, version = ?, passcode_id = ?, last_seen_at = datetime('now') WHERE id = ?`,
+      [
+        opts.machine_id,
+        hardwareId,
+        opts.platform,
+        opts.arch,
+        opts.version ?? row.version,
+        opts.passcode_id ?? row.passcode_id,
+        row.id,
+      ],
     )
-    return d.query<InstallRow, [string]>(`SELECT * FROM installs WHERE machine_id = ?`).get(opts.machine_id)!
+    return d.query<InstallRow, [string]>(`SELECT * FROM installs WHERE id = ?`).get(row.id)!
   }
+
   const id = randomUUID()
   d.run(
-    `INSERT INTO installs (id, machine_id, platform, arch, version, passcode_id) VALUES (?, ?, ?, ?, ?, ?)`,
-    [id, opts.machine_id, opts.platform, opts.arch, opts.version ?? null, opts.passcode_id ?? null],
+    `INSERT INTO installs (id, machine_id, hardware_id, platform, arch, version, passcode_id) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [id, opts.machine_id, opts.hardware_id ?? null, opts.platform, opts.arch, opts.version ?? null, opts.passcode_id ?? null],
   )
   return d.query<InstallRow, [string]>(`SELECT * FROM installs WHERE id = ?`).get(id)!
 }
 
+export function getInstallByHardware(hardwareId: string): InstallRow | null {
+  return db().query<InstallRow, [string]>(`SELECT * FROM installs WHERE hardware_id = ?`).get(hardwareId) ?? null
+}
+
 export function getInstallByMachine(machineId: string): InstallRow | null {
   return db().query<InstallRow, [string]>(`SELECT * FROM installs WHERE machine_id = ?`).get(machineId) ?? null
+}
+
+export function getInstallByMachineOrHardware(machineId: string, hardwareId?: string | null): InstallRow | null {
+  const d = db()
+  const byMachine = d.query<InstallRow, [string]>(`SELECT * FROM installs WHERE machine_id = ?`).get(machineId)
+  if (byMachine) return byMachine
+  if (hardwareId) {
+    const byHardware = d.query<InstallRow, [string]>(`SELECT * FROM installs WHERE hardware_id = ?`).get(hardwareId)
+    if (byHardware) return byHardware
+  }
+  return null
 }
 
 export function listInstalls(): InstallRow[] {
@@ -348,6 +417,122 @@ export function getUsage(installId: string, periodKey: string): number {
     `SELECT seconds_used FROM usage WHERE install_id = ? AND period_key = ?`,
   ).get(installId, periodKey)
   return row?.seconds_used ?? 0
+}
+
+// ─── Trials ───────────────────────────────────────────────────────────
+
+export interface TrialResult {
+  install: InstallRow
+  passcode: PasscodeRow | null
+  already_started: boolean
+  trial_expires_at: string | null
+}
+
+// Grants a one-time free trial per machine. A trial is issued only once per
+// hardware; repeat calls (or reinstalls under a new machine_id) return the
+// existing trial (so it cannot be restarted or extended by reinstalling).
+export function startTrial(opts: {
+  machine_id: string
+  hardware_id?: string
+  platform: string
+  arch: string
+  version?: string
+}): TrialResult {
+  const d = db()
+  const install = upsertInstall(opts)
+
+  if (install.trial_started_at) {
+    return {
+      install,
+      passcode: install.passcode_id ? getPasscode(install.passcode_id) : null,
+      already_started: true,
+      trial_expires_at: install.passcode_id ? (getPasscode(install.passcode_id)?.expires_at ?? null) : null,
+    }
+  }
+
+  d.run(`UPDATE installs SET trial_started_at = datetime('now') WHERE id = ?`, [install.id])
+
+  const expires = new Date(Date.now() + TRIAL_DURATION_DAYS * 24 * 60 * 60 * 1000).toISOString()
+  const passcode = createPasscode({ type: "public", expires_at: expires, note: "Free 21-day trial" })
+  d.run(`UPDATE installs SET passcode_id = ? WHERE id = ?`, [passcode.id, install.id])
+
+  writeAudit("TRIAL_STARTED", opts.machine_id, install.id, { machine_id: opts.machine_id })
+  return {
+    install: d.query<InstallRow, [string]>(`SELECT * FROM installs WHERE id = ?`).get(install.id)!,
+    passcode,
+    already_started: false,
+    trial_expires_at: expires,
+  }
+}
+
+// Binds a machine to a validated passcode. Used by the web access page so a
+// CLI waiting on /v1/install/status can see the activation take effect.
+export function activateInstallByCode(opts: {
+  machine_id: string
+  hardware_id?: string
+  platform: string
+  arch: string
+  version?: string
+  passcode_id: string
+}): InstallRow {
+  return upsertInstall({
+    machine_id: opts.machine_id,
+    hardware_id: opts.hardware_id,
+    platform: opts.platform,
+    arch: opts.arch,
+    version: opts.version,
+    passcode_id: opts.passcode_id,
+  })
+}
+
+// ─── Trial listing & alerts ───────────────────────────────────────────
+
+export interface TrialListItem {
+  install_id: string
+  machine_id: string
+  platform: string
+  arch: string
+  version: string | null
+  passcode_id: string | null
+  trial_started_at: string
+  expires_at: string | null
+  blocked: number
+}
+
+// Installs that received a free trial, with the linked passcode expiry.
+export function listTrials(): TrialListItem[] {
+  return db().query<TrialListItem, []>(`
+    SELECT i.id AS install_id, i.machine_id, i.platform, i.arch, i.version,
+           i.passcode_id, i.trial_started_at, p.expires_at, i.blocked
+    FROM installs i
+    LEFT JOIN passcodes p ON p.id = i.passcode_id
+    WHERE i.trial_started_at IS NOT NULL
+    ORDER BY i.trial_started_at DESC
+  `).all()
+}
+
+// Trials that are within `hoursWindow` hours of expiry (or already expired) and
+// have not yet been alerted, so the operator can nudge each user once.
+export function listPendingTrialAlerts(hoursWindow: number): TrialListItem[] {
+  const limit = new Date(Date.now() + hoursWindow * 60 * 60 * 1000).toISOString()
+  return db().query<TrialListItem, [string]>(`
+    SELECT i.id AS install_id, i.machine_id, i.platform, i.arch, i.version,
+           i.passcode_id, i.trial_started_at, p.expires_at, i.blocked
+    FROM installs i
+    JOIN passcodes p ON p.id = i.passcode_id
+    WHERE i.trial_started_at IS NOT NULL
+      AND p.expires_at IS NOT NULL
+      AND p.expires_at <= ?
+      AND i.machine_id NOT IN (SELECT machine_id FROM trial_alerts)
+    ORDER BY p.expires_at ASC
+  `).all(limit)
+}
+
+export function markTrialAlerted(machineId: string, passcodeId: string | null, expiresAt: string): void {
+  db().run(
+    `INSERT OR REPLACE INTO trial_alerts (machine_id, passcode_id, expires_at) VALUES (?, ?, ?)`,
+    [machineId, passcodeId, expiresAt],
+  )
 }
 
 // ─── Payment Requests ────────────────────────────────────────────────
@@ -406,6 +591,7 @@ export function createPaymentRequest(input: PaymentRequestInput): { request: Pay
   const duplicate = findDuplicatePayment(input.transactionReference, input.paymentMethod, input.paymentAmount, input.email)
   const id = randomUUID()
   const ref = input.transactionReference ?? null
+  const method = (input.paymentMethod ?? "other").trim() || "other"
   d.run(
     `INSERT INTO payment_requests (id, full_name, email, phone_number, payment_method, transaction_reference, payment_amount, payment_date, payment_time, payment_proof, is_duplicate)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -414,7 +600,7 @@ export function createPaymentRequest(input: PaymentRequestInput): { request: Pay
       input.fullName,
       input.email ?? null,
       input.phoneNumber ?? null,
-      input.paymentMethod ?? null,
+      method,
       ref,
       input.paymentAmount ?? null,
       input.paymentDate ?? null,
@@ -500,21 +686,67 @@ export function listAuditLog(): AuditLogRow[] {
 
 // ─── Helpers ──────────────────────────────────────────────────────────
 
+export function hashCode(code: string): string {
+  return createHash("sha256").update(code).digest("hex")
+}
+
+export function maskCode(code: string): string {
+  const segments = code.split("-")
+  if (segments.length < 2) return "••••"
+  const head = segments[0]
+  const tail = segments.slice(1).map(() => "••••").join("-")
+  return `${head}-${tail}`
+}
+
+// The raw passcode is returned exactly once, when it is first created; the
+// stored hash is never included in any API response.
+export interface PasscodeCreatedView {
+  id: string
+  code: string
+  type: "public" | "personal"
+  created_at: string
+  expires_at: string
+  max_uses: number | null
+  current_uses: number
+  blocked: number
+  note: string | null
+  payment_request_id: string | null
+}
+
+export function toCreatedPasscode(p: PasscodeRow): PasscodeCreatedView {
+  return {
+    id: p.id,
+    code: p.code,
+    type: p.type,
+    created_at: p.created_at,
+    expires_at: p.expires_at,
+    max_uses: p.max_uses,
+    current_uses: p.current_uses,
+    blocked: p.blocked,
+    note: p.note,
+    payment_request_id: p.payment_request_id,
+  }
+}
+
+const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+
+function randomCodeChar(): string {
+  return CODE_CHARS[randomInt(CODE_CHARS.length)]
+}
+
 export function randomCode(): string {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
   let code = ""
   for (let i = 0; i < 12; i++) {
-    code += chars[Math.floor(Math.random() * chars.length)]
+    code += randomCodeChar()
     if (i === 3 || i === 7) code += "-"
   }
   return code
 }
 
 export function randomAccessCode(): string {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
   const block = () => {
     let s = ""
-    for (let i = 0; i < 4; i++) s += chars[Math.floor(Math.random() * chars.length)]
+    for (let i = 0; i < 4; i++) s += randomCodeChar()
     return s
   }
   return `ICODE-${block()}-${block()}`

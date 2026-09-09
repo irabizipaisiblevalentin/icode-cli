@@ -3,15 +3,20 @@ import fs from "fs"
 import path from "path"
 import crypto from "crypto"
 import open from "open"
+import { getHardwareId } from "./hardware"
 
 // ─── Control Server URL (baked at build time) ─────────────────────────
 
 declare const ICODE_CONTROL_URL: string | undefined
+declare const OPENCODE_VERSION: string | undefined
 
 export const CONTROL_URL =
   (typeof ICODE_CONTROL_URL !== "undefined" ? ICODE_CONTROL_URL : undefined) ??
   process.env.ICODE_CONTROL_URL ??
   "https://icode-s05p.onrender.com"
+
+const CLIENT_VERSION =
+  typeof OPENCODE_VERSION !== "undefined" && OPENCODE_VERSION ? OPENCODE_VERSION : "0.0.0"
 
 // ─── Local Storage ────────────────────────────────────────────────────
 
@@ -105,9 +110,10 @@ export async function validatePasscode(code: string): Promise<ValidateResponse |
   return serverPost<ValidateResponse>("/v1/passcode/validate", {
     code,
     machine_id: machineId,
+    hardware_id: getHardwareId(),
     platform: process.platform,
     arch: process.arch,
-    version: "0.0.0",
+    version: CLIENT_VERSION,
   })
 }
 
@@ -115,6 +121,7 @@ export async function sendHeartbeat(secondsActive: number): Promise<HeartbeatRes
   const machineId = getMachineId()
   return serverPost<HeartbeatResponse>("/v1/install/heartbeat", {
     machine_id: machineId,
+    hardware_id: getHardwareId(),
     seconds_active: secondsActive,
   })
 }
@@ -123,6 +130,7 @@ export async function checkStatus(): Promise<StatusResponse | null> {
   const machineId = getMachineId()
   return serverPost<StatusResponse>("/v1/install/status", {
     machine_id: machineId,
+    hardware_id: getHardwareId(),
   })
 }
 
@@ -272,9 +280,10 @@ async function startTrialRequest(): Promise<TrialResponse | null> {
   const machineId = getMachineId()
   return serverPost<TrialResponse>("/v1/trial/start", {
     machine_id: machineId,
+    hardware_id: getHardwareId(),
     platform: process.platform,
     arch: process.arch,
-    version: "0.0.0",
+    version: CLIENT_VERSION,
   })
 }
 

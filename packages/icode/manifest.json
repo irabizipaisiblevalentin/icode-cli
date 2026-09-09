@@ -1,11 +1,11 @@
 {
-  "version": "1.1.1",
+  "version": "1.1.2",
   "optionalDependencies": {
-    "@vln.codes__/icode-linux-x64": "1.1.1",
-    "@vln.codes__/icode-linux-arm64": "1.1.1",
-    "@vln.codes__/icode-darwin-x64": "1.1.1",
-    "@vln.codes__/icode-darwin-arm64": "1.1.1",
-    "@vln.codes__/icode-windows-x64": "1.1.1",
-    "@vln.codes__/icode-windows-arm64": "1.1.1"
+    "@vln.codes__/icode-linux-x64": "1.1.2",
+    "@vln.codes__/icode-linux-arm64": "1.1.2",
+    "@vln.codes__/icode-darwin-x64": "1.1.2",
+    "@vln.codes__/icode-darwin-arm64": "1.1.2",
+    "@vln.codes__/icode-windows-x64": "1.1.2",
+    "@vln.codes__/icode-windows-arm64": "1.1.2"
   }
 }
