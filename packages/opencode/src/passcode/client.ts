@@ -158,6 +158,17 @@ export interface PasscodeStatus {
   allowed: boolean
   blocked: boolean
   warn: boolean
+  reason:
+    | "ok"
+    | "no_passcode"
+    | "trial_expired"
+    | "offline_grace"
+    | "offline"
+    | "blocked"
+    | "passcode_blocked"
+    | "passcode_expired"
+    | "not_registered"
+    | "invalid"
   message: string
 }
 
@@ -170,6 +181,7 @@ export async function enforcePasscodeGate(): Promise<PasscodeStatus> {
       allowed: false,
       blocked: false,
       warn: false,
+      reason: "no_passcode",
       message: "No Passcode found. Please enter your Passcode.",
     }
   }
@@ -180,6 +192,7 @@ export async function enforcePasscodeGate(): Promise<PasscodeStatus> {
       allowed: false,
       blocked: true,
       warn: false,
+      reason: "trial_expired",
       message: "Your trial has ended.\nTo keep using iCode, pay 1,000 RWF and get a Passcode.\nOpen the browser to continue.",
     }
   }
@@ -195,6 +208,7 @@ export async function enforcePasscodeGate(): Promise<PasscodeStatus> {
         allowed: true,
         blocked: false,
         warn: true,
+        reason: "offline_grace",
         message: "Running offline: your passcode was validated within the last 24 hours.",
       }
     }
@@ -202,6 +216,7 @@ export async function enforcePasscodeGate(): Promise<PasscodeStatus> {
       allowed: false,
       blocked: true,
       warn: false,
+      reason: "offline",
       message: "Could not verify the passcode. Please check your internet connection.",
     }
   }
@@ -211,6 +226,7 @@ export async function enforcePasscodeGate(): Promise<PasscodeStatus> {
       allowed: false,
       blocked: true,
       warn: false,
+      reason: "blocked",
       message: serverStatus.message ?? "This device (installation) has been blocked.",
     }
   }
@@ -220,6 +236,7 @@ export async function enforcePasscodeGate(): Promise<PasscodeStatus> {
       allowed: false,
       blocked: true,
       warn: false,
+      reason: "passcode_blocked",
       message: serverStatus.message ?? "Your access to iCode has been revoked.\nPlease contact the iCode admin.",
     }
   }
@@ -229,15 +246,18 @@ export async function enforcePasscodeGate(): Promise<PasscodeStatus> {
       allowed: false,
       blocked: true,
       warn: false,
+      reason: "passcode_expired",
       message: serverStatus.message ?? "Your trial has ended.\nTo keep using iCode, pay 1,000 RWF and get a Passcode.",
     }
   }
 
   if (!serverStatus.ok || !serverStatus.passcode_valid) {
+    const notRegistered = serverStatus.ok === false && (serverStatus.message?.includes("not registered") ?? false)
     return {
       allowed: false,
       blocked: true,
       warn: false,
+      reason: notRegistered ? "not_registered" : "invalid",
       message: serverStatus.message ?? "Your Passcode is no longer valid. Please contact support.",
     }
   }
@@ -248,6 +268,7 @@ export async function enforcePasscodeGate(): Promise<PasscodeStatus> {
       allowed: false,
       blocked: true,
       warn: false,
+      reason: "trial_expired",
       message: "Your trial has ended.\nTo keep using iCode, pay 1,000 RWF and get a Passcode.",
     }
   }
@@ -256,6 +277,7 @@ export async function enforcePasscodeGate(): Promise<PasscodeStatus> {
     allowed: true,
     blocked: false,
     warn: false,
+    reason: "ok",
     message: "OK",
   }
 }
@@ -372,6 +394,25 @@ export async function runPasscodeGate(): Promise<boolean> {
       if (s.warn) console.log(`⚠ ${s.message}`)
       return true
     }
+
+    // The server no longer recognises this machine (e.g. it lost its data at
+    // some point in the past) but the locally stored free trial has not ended:
+    // re-assert the trial server-side instead of forcing a paid passcode on a
+    // user whose 21-day period is still running.
+    if (s.reason === "not_registered" && stored && stored.passcode === "TRIAL") {
+      const trialRes = await startTrialRequest()
+      if (trialRes?.trial_active && trialRes.expires_at) {
+        storePasscode({
+          machine_id: getMachineId(),
+          passcode: "TRIAL",
+          passcode_id: null,
+          expires_at: trialRes.expires_at,
+          validated_at: new Date().toISOString(),
+        })
+        return true
+      }
+    }
+
     console.log(`\n${s.message}\n`)
   }
 
