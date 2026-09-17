@@ -80,6 +80,8 @@ interface StatusResponse {
   passcode_valid?: boolean
   passcode_blocked?: boolean
   passcode_expired?: boolean
+  google_trial_active?: boolean
+  google_expires_at?: string
   expires_at?: string
   type?: string
   message?: string
@@ -134,6 +136,14 @@ export async function checkStatus(): Promise<StatusResponse | null> {
   })
 }
 
+// True when the server reports an active Google trial for this machine's
+// hardware fingerprint. Used to let CLI runs through on machines the user
+// licensed by signing in with Google (from iCode Editor).
+export async function hasActiveGoogleTrial(): Promise<boolean> {
+  const status = await checkStatus()
+  return !!(status && status.google_trial_active)
+}
+
 export function savePasscode(code: string, passcodeId: string | null, expiresAt: string | null): void {
   storePasscode({
     machine_id: getMachineId(),
@@ -173,6 +183,19 @@ export interface PasscodeStatus {
 }
 
 export async function enforcePasscodeGate(): Promise<PasscodeStatus> {
+  // A machine linked to a Google account with an active trial is licensed even
+  // if the CLI has never stored a Passcode, because trial/passcode and the
+  // Google trial are all bound to the same hardware fingerprint on the server.
+  if (await hasActiveGoogleTrial()) {
+    return {
+      allowed: true,
+      blocked: false,
+      warn: false,
+      reason: "ok",
+      message: "OK",
+    }
+  }
+
   const stored = loadPasscode()
 
   // No passcode stored → prompt required
